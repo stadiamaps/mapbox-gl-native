@@ -9,6 +9,7 @@
 #include <mbgl/util/projection.hpp>
 #include <mbgl/util/mat4.hpp>
 #include <mbgl/util/size.hpp>
+#include <mbgl/util/camera.hpp>
 
 #include <cstdint>
 #include <array>
@@ -208,6 +209,7 @@ public:
 
     float getCameraToTileDistance(const UnwrappedTileID&) const;
     float maxPitchScaleFactor() const;
+    double getScaleForElevation(double meters) const;
 
     /** Recenter the map so that the given coordinate is located at the given
         point on screen. */
@@ -276,6 +278,7 @@ private:
     bool axonometric = false;
 
     EdgeInsets edgeInsets;
+    mutable util::Camera camera;
 
     // cache values for spherical mercator math
     double Bc = Projection::worldSize(scale) / util::DEGREES_MAX;

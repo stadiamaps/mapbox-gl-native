@@ -745,6 +745,7 @@ add_library(
     ${PROJECT_SOURCE_DIR}/src/mbgl/tile/vector_tile.hpp
     ${PROJECT_SOURCE_DIR}/src/mbgl/tile/vector_tile_data.cpp
     ${PROJECT_SOURCE_DIR}/src/mbgl/tile/vector_tile_data.hpp
+    ${PROJECT_SOURCE_DIR}/src/mbgl/util/camera.cpp
     ${PROJECT_SOURCE_DIR}/src/mbgl/util/bounding_volumes.hpp
     ${PROJECT_SOURCE_DIR}/src/mbgl/util/bounding_volumes.cpp
     ${PROJECT_SOURCE_DIR}/src/mbgl/util/chrono.cpp
@@ -786,6 +787,7 @@ add_library(
     ${PROJECT_SOURCE_DIR}/src/mbgl/util/mat4.hpp
     ${PROJECT_SOURCE_DIR}/src/mbgl/util/math.hpp
     ${PROJECT_SOURCE_DIR}/src/mbgl/util/premultiply.cpp
+    ${PROJECT_SOURCE_DIR}/src/mbgl/util/quaternion.cpp
     ${PROJECT_SOURCE_DIR}/src/mbgl/util/rapidjson.cpp
     ${PROJECT_SOURCE_DIR}/src/mbgl/util/rapidjson.hpp
     ${PROJECT_SOURCE_DIR}/src/mbgl/util/rect.hpp

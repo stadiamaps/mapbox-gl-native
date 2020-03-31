@@ -100,55 +100,88 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
     const double furthestDistance = cameraToCenterDistance / (1 - tanMultiple);
     // Add a bit extra to avoid precision problems when a fragment's distance is exactly `furthestDistance`
     const double farZ = furthestDistance * 1.01;
-
-    matrix::perspective(projMatrix, getFieldOfView(), double(size.width) / size.height, nearZ, farZ);
-
-    // Move the center of perspective to center of specified edgeInsets.
-    // Values are in range [-1, 1] where the upper and lower range values
-    // position viewport center to the screen edges. This is overriden
-    // if using axonometric perspective (not in public API yet, Issue #11882).
-    // TODO(astojilj): Issue #11882 should take edge insets into account, too.
-    projMatrix[8] = -offset.x * 2.0 / size.width;
-    projMatrix[9] = offset.y * 2.0 / size.height;
-
+    const double pixelsPerMeters = 1.0 / Projection::getMetersPerPixelAtLatitude(getLatLng(LatLng::Unwrapped).latitude(), getZoom());
     const bool flippedY = viewportMode == ViewportMode::FlippedY;
-    matrix::scale(projMatrix, projMatrix, 1.0, flippedY ? 1 : -1, 1);
 
-    matrix::translate(projMatrix, projMatrix, 0, 0, -cameraToCenterDistance);
+    const double dx = x - 0.5 * Projection::worldSize(scale);
+    const double dy = y - 0.5 * Projection::worldSize(scale);
 
-    using NO = NorthOrientation;
-    switch (getNorthOrientation()) {
-        case NO::Rightwards:
-            matrix::rotate_y(projMatrix, projMatrix, getPitch());
-            break;
-        case NO::Downwards:
-            matrix::rotate_x(projMatrix, projMatrix, -getPitch());
-            break;
-        case NO::Leftwards:
-            matrix::rotate_y(projMatrix, projMatrix, -getPitch());
-            break;
-        default:
-            matrix::rotate_x(projMatrix, projMatrix, getPitch());
-            break;
-    }
+    // Create transformation using camera class
+    camera.perspective(getFieldOfView(), double(size.width) / size.height, nearZ, farZ);
+    camera.setFlippedY(flippedY);
 
-    matrix::rotate_z(projMatrix, projMatrix, getBearing() + getNorthOrientationAngle());
+    vec3 orbitPosition = {0.0, 0.0, cameraToCenterDistance};
 
-    const double dx = pixel_x() - size.width / 2.0f;
-    const double dy = pixel_y() - size.height / 2.0f;
-    matrix::translate(projMatrix, projMatrix, dx, dy, 0);
+    // Order of multiplication is important here as we want to apply bearing before pitch
+    Quaternion rotBearing = Quaternion::fromEulerAngles(0.0, 0.0, getBearing());
+    Quaternion rotPitch = Quaternion::fromEulerAngles(getPitch(), 0.0, 0.0);
+    Quaternion rotation = rotPitch.multiply(rotBearing);
 
-    if (axonometric) {
-        // mat[11] controls perspective
-        projMatrix[11] = 0;
+    // Opposing order of rotations is required to find orbital position around the map center
+    Quaternion orbitRotation = rotBearing.multiply(rotPitch);
 
-        // mat[8], mat[9] control x-skew, y-skew
-        projMatrix[8] = xSkew;
-        projMatrix[9] = ySkew;
-    }
+    orbitPosition = orbitRotation.transform(orbitPosition);
+    vec3 cameraPosition = {-dx + orbitPosition[0], -dy - orbitPosition[1], orbitPosition[2]};
 
-    matrix::scale(projMatrix, projMatrix, 1, 1,
-                  1.0 / Projection::getMetersPerPixelAtLatitude(getLatLng(LatLng::Unwrapped).latitude(), getZoom()));
+    camera.setPosition(cameraPosition, pixelsPerMeters);
+    camera.setOrientation(rotation);
+
+    // Compute transformation matrix from world to clip
+    mat4 worldToCamera = camera.getWorldToCamera();
+    mat4 cameraToClip = camera.getCameraToClip();
+
+    matrix::multiply(projMatrix, cameraToClip, worldToCamera);
+
+    // matrix::perspective(projMatrix, getFieldOfView(), double(size.width) / size.height, nearZ, farZ);
+
+    // // Move the center of perspective to center of specified edgeInsets.
+    // // Values are in range [-1, 1] where the upper and lower range values
+    // // position viewport center to the screen edges. This is overriden
+    // // if using axonometric perspective (not in public API yet, Issue #11882).
+    // // TODO(astojilj): Issue #11882 should take edge insets into account, too.
+    // projMatrix[8] = -offset.x * 2.0 / size.width;
+    // projMatrix[9] = offset.y * 2.0 / size.height;
+
+    // matrix::scale(projMatrix, projMatrix, 1.0, flippedY ? 1 : -1, 1);
+
+    // matrix::translate(projMatrix, projMatrix, 0, 0, -cameraToCenterDistance);
+
+    // // TODO: support north orientation (modify orientation)
+    // using NO = NorthOrientation;
+    // switch (getNorthOrientation()) {
+    //     case NO::Rightwards:
+    //         matrix::rotate_y(projMatrix, projMatrix, getPitch());
+    //         break;
+    //     case NO::Downwards:
+    //         matrix::rotate_x(projMatrix, projMatrix, -getPitch());
+    //         break;
+    //     case NO::Leftwards:
+    //         matrix::rotate_y(projMatrix, projMatrix, -getPitch());
+    //         break;
+    //     default:
+    //         matrix::rotate_x(projMatrix, projMatrix, getPitch());
+    //         break;
+    // }
+
+    // matrix::rotate_z(projMatrix, projMatrix, getBearing() + getNorthOrientationAngle());
+
+    // //const double dx = (size.width - Projection::worldSize(scale)) / 2 + x - size.width / 2.0f;
+    // //const double dy = (size.height - Projection::worldSize(scale)) / 2 + y - size.height / 2.0f;
+
+    // //const double dx = pixel_x() - size.width / 2.0f;
+    // //const double dy = pixel_y() - size.height / 2.0f;
+    // matrix::translate(projMatrix, projMatrix, dx, dy, 0);
+
+    // if (axonometric) {
+    //     // mat[11] controls perspective
+    //     projMatrix[11] = 0;
+
+    //     // mat[8], mat[9] control x-skew, y-skew
+    //     projMatrix[8] = xSkew;
+    //     projMatrix[9] = ySkew;
+    // }
+
+    // matrix::scale(projMatrix, projMatrix, 1, 1, pixelsPerMeters);
 
     // Make a second projection matrix that is aligned to a pixel grid for rendering raster tiles.
     // We're rounding the (floating point) x/y values to achieve to avoid rendering raster images to fractional
@@ -672,6 +705,11 @@ float TransformState::maxPitchScaleFactor() const {
     vec4 topPoint;
     matrix::transformMat4(topPoint, p, getCoordMatrix());
     return topPoint[3] / getCameraToCenterDistance();
+}
+
+double TransformState::getScaleForElevation(double meters) const {
+    (void)meters;
+    return 0.0;
 }
 
 } // namespace mbgl
