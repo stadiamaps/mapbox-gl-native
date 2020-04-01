@@ -21,6 +21,9 @@
 #include <memory>
 
 namespace mbgl {
+namespace util {
+    class Camera;
+}
 
 class RendererFrontend;
 
@@ -134,6 +137,8 @@ public:
 
     bool isFullyLoaded() const;
     void dumpDebugLogs() const;
+
+    util::Camera& overrideCameraControls();
 
 protected:
     class Impl;

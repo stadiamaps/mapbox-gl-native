@@ -220,6 +220,8 @@ public:
     const mat4& getProjectionMatrix() const;
     const mat4& getInvProjectionMatrix() const;
 
+    util::Camera& overrideCameraControls();
+
 private:
     bool rotatedNorth() const;
 
@@ -262,9 +264,10 @@ private:
     bool scaling = false;
     bool panning = false;
     bool gestureInProgress = false;
+    bool overrideControls = false;
 
     // map position
-    double x = 0, y = 0;
+    mutable double x = 0, y = 0;
     double bearing = 0;
     double scale = 1;
     // This fov value is somewhat arbitrary. The altitude of the camera used

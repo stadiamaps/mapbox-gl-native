@@ -500,4 +500,8 @@ void Map::dumpDebugLogs() const {
     Log::Info(Event::General, "--------------------------------------------------------------------------------");
 }
 
+util::Camera& Map::overrideCameraControls() {
+    return impl->transform.overrideCameraControls();
+}
+
 } // namespace mbgl

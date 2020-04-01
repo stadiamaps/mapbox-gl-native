@@ -1,6 +1,7 @@
 #pragma once
 
 #include "quaternion.hpp"
+#include <mbgl/util/size.hpp>
 
 namespace mbgl {
 
@@ -11,6 +12,9 @@ namespace util {
 class Camera {
 public:
     Camera();
+
+    // Update screen size
+    void setSize(const Size& size_);
 
     // Sets perspective projection for the camera
     void perspective(double fovY, double aspectRatio, double nearZ, double farZ);
@@ -28,9 +32,11 @@ public:
     void setPosition(const vec3& position, double pixelsPerMeter_);
 
     // Set position in LatLng and elevation in meters
-    void setPosition(const LatLng& position, double pixelElevation, double zoom);
+    void setPosition(const LatLng& position, double zoom);
 
 private:
+    Size size;
+    double fovy;
     Quaternion orientation;
     mat4 cameraTransform;       // world transformation of the camera. Position and orientation
     mat4 transform;             // World to camera space. Combination of camera and map transforms

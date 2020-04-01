@@ -24,6 +24,8 @@
 #include <mbgl/util/logging.hpp>
 #include <mbgl/util/platform.hpp>
 #include <mbgl/util/string.hpp>
+#include <mbgl/util/camera.hpp>
+#include <mbgl/util/interpolate.hpp>
 
 #include <mapbox/cheap_ruler.hpp>
 #include <mapbox/geometry.hpp>
@@ -482,6 +484,9 @@ void GLFWView::onKey(GLFWwindow *window, int key, int /*scancode*/, int action, 
         case GLFW_KEY_G: {
             view->toggleLocationIndicatorLayer();
         } break;
+        case GLFW_KEY_Y: {
+            view->flyByDemoPhase = 0;
+        } break;
         }
     }
 
@@ -501,6 +506,42 @@ void GLFWView::onKey(GLFWwindow *window, int key, int /*scancode*/, int action, 
         case GLFW_KEY_M: view->addAnimatedAnnotation(); break;
         }
     }
+}
+
+void GLFWView::showFlybyDemo(double dt) {
+    const mbgl::LatLng trainStartPos = { 60.171367, 24.941359 };
+    const mbgl::LatLng trainEndPos = { 60.185147, 24.936668 };
+    const mbgl::LatLng cameraStartPos = { 60.167443, 24.927176 };
+    const mbgl::LatLng cameraEndPos = { 60.185126, 24.939379 };
+    const double cameraStartZoom = 15.520899;
+    const double cameraEndZoom = 15.385119;
+    const double duration = 5.0;
+
+    mbgl::util::Camera& camera = map->overrideCameraControls();
+    (void)camera;
+
+    // Interpolate between starting and ending points
+    flyByDemoPhase += dt / duration;
+
+    auto trainLat = mbgl::util::interpolate(trainStartPos.latitude(), trainEndPos.latitude(), flyByDemoPhase);
+    auto trainLng = mbgl::util::interpolate(trainStartPos.longitude(), trainEndPos.longitude(), flyByDemoPhase);
+
+    auto cameraLat = mbgl::util::interpolate(cameraStartPos.latitude(), cameraEndPos.latitude(), flyByDemoPhase);
+    auto cameraLng = mbgl::util::interpolate(cameraStartPos.longitude(), cameraEndPos.longitude(), flyByDemoPhase);
+    auto cameraZoom = mbgl::util::interpolate(cameraStartZoom, cameraEndZoom, flyByDemoPhase);
+
+    mbgl::CameraOptions o;
+    camera.setPosition(mbgl::LatLng{cameraLat, cameraLng}, cameraZoom);
+    map->jumpTo(o.withZoom(cameraZoom));//.withCenter(mbgl::LatLng{cameraLat, cameraLng}));
+    //printf("%f %f\n", cameraLat, cameraLng);
+    (void)trainLat;
+    (void)trainLng;
+    //camera.lookAt(mbgl::LatLng{trainLat, trainLng});
+    // camera start --lat="60.167443" --lon="24.927176" --zoom="14.840875"
+    // camera end --lat="60.185126" --lon="24.939379" --zoom="16.877620" --bearing "-139.093001"
+
+    if (flyByDemoPhase > 1.0)
+        flyByDemoPhase = -1.0;
 }
 
 mbgl::Color GLFWView::makeRandomColor() const {
@@ -842,7 +883,7 @@ void GLFWView::run() {
 
         glfwPollEvents();
 
-        if (dirty && rendererFrontend) {
+        if ((dirty || flyByDemoPhase >= 0.0) && rendererFrontend) {
             dirty = false;
             const double started = glfwGetTime();
 
@@ -851,15 +892,19 @@ void GLFWView::run() {
 
             updateAnimatedAnnotations();
 
+            if (flyByDemoPhase >= 0.0) {
+
+                showFlybyDemo(0.016);
+            }
+
             mbgl::gfx::BackendScope scope { backend->getRendererBackend() };
 
             rendererFrontend->render();
 
             report(1000 * (glfwGetTime() - started));
-            if (benchmark) {
+            if (benchmark || flyByDemoPhase >= 0) {
                 invalidate();
             }
-
         }
     };
 

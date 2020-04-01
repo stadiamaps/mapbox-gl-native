@@ -110,21 +110,23 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
     camera.perspective(getFieldOfView(), double(size.width) / size.height, nearZ, farZ);
     camera.setFlippedY(flippedY);
 
-    vec3 orbitPosition = {0.0, 0.0, cameraToCenterDistance};
+    if (!overrideControls) {
+        vec3 orbitPosition = {0.0, 0.0, cameraToCenterDistance};
 
-    // Order of multiplication is important here as we want to apply bearing before pitch
-    Quaternion rotBearing = Quaternion::fromEulerAngles(0.0, 0.0, getBearing());
-    Quaternion rotPitch = Quaternion::fromEulerAngles(getPitch(), 0.0, 0.0);
-    Quaternion rotation = rotPitch.multiply(rotBearing);
+        // Order of multiplication is important here as we want to apply bearing before pitch
+        Quaternion rotBearing = Quaternion::fromEulerAngles(0.0, 0.0, getBearing());
+        Quaternion rotPitch = Quaternion::fromEulerAngles(getPitch(), 0.0, 0.0);
+        Quaternion rotation = rotPitch.multiply(rotBearing);
 
-    // Opposing order of rotations is required to find orbital position around the map center
-    Quaternion orbitRotation = rotBearing.multiply(rotPitch);
+        // Opposing order of rotations is required to find orbital position around the map center
+        Quaternion orbitRotation = rotBearing.multiply(rotPitch);
 
-    orbitPosition = orbitRotation.transform(orbitPosition);
-    vec3 cameraPosition = {-dx + orbitPosition[0], -dy - orbitPosition[1], orbitPosition[2]};
+        orbitPosition = orbitRotation.transform(orbitPosition);
+        vec3 cameraPosition = {-dx + orbitPosition[0], -dy - orbitPosition[1], orbitPosition[2]};
 
-    camera.setPosition(cameraPosition, pixelsPerMeters);
-    camera.setOrientation(rotation);
+        camera.setPosition(cameraPosition, pixelsPerMeters);
+        camera.setOrientation(rotation);
+    }
 
     // Compute transformation matrix from world to clip
     mat4 worldToCamera = camera.getWorldToCamera();
@@ -201,6 +203,11 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
     }
 }
 
+util::Camera& TransformState::overrideCameraControls() {
+    overrideControls = true;
+    return camera;
+}
+
 void TransformState::updateMatricesIfNeeded() const {
     if (!needsMatricesUpdate() || size.isEmpty()) return;
 
@@ -245,6 +252,7 @@ Size TransformState::getSize() const {
 void TransformState::setSize(const Size& size_) {
     if (size != size_) {
         size = size_;
+        camera.setSize(size);
         requestMatricesUpdate = true;
     }
 }
@@ -677,6 +685,7 @@ void TransformState::setScalePoint(const double newScale, const ScreenCoordinate
     constrain(constrainedScale, constrainedPoint.x, constrainedPoint.y);
 
     scale = constrainedScale;
+
     x = constrainedPoint.x;
     y = constrainedPoint.y;
     Bc = Projection::worldSize(scale) / util::DEGREES_MAX;
