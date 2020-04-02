@@ -163,7 +163,7 @@ std::vector<OverscaledTileID> tileCover(const TransformState& state, uint8_t z, 
 
     const double numTiles = std::pow(2.0, z);
     const double worldSize = Projection::worldSize(state.getScale());
-    const uint8_t minZoom = state.getPitch() <= (60.0 / 180.0) * M_PI ? z : 0;
+    //const uint8_t minZoom = state.getPitch() <= (60.0 / 180.0) * M_PI ? z : 0;
     const uint8_t maxZoom = z;
     const uint8_t overscaledZoom = overscaledZ.value_or(z);
     const bool flippedY = state.getViewportMode() == ViewportMode::FlippedY;
@@ -225,7 +225,7 @@ std::vector<OverscaledTileID> tileCover(const TransformState& state, uint8_t z, 
         const double distToSplit = radiusOfMaxLvlLodInTiles + (1 << (maxZoom - node.zoom)) - 2;
 
         // Have we reached the target depth or is the tile too far away to be any split further?
-        if (node.zoom == maxZoom || (*longestDim > distToSplit && node.zoom >= minZoom)) {
+        if (node.zoom == maxZoom || (*longestDim > distToSplit)) {// && node.zoom >= minZoom)) {
             // Perform precise intersection test between the frustum and aabb. This will cull < 1% false positives
             // missed by the original test
             if (node.fullyVisible || frustum.intersectsPrecise(node.aabb, true) != IntersectionResult::Separate) {
