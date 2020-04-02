@@ -8,10 +8,21 @@
 namespace mbgl {
 namespace util {
 
-//export function latFromMercatorY(y: number) {
-//    const y2 = 180 - y * 360;
-//    return 360 / Math.PI * Math.atan(Math.exp(y2 * Math.PI / 180)) - 90;
-//}
+// export function mercatorXfromLng(lng: number) {
+//     return (180 + lng) / 360;
+// }
+
+// export function mercatorYfromLat(lat: number) {
+//     return (180 - (180 / Math.PI * Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)))) / 360;
+// }
+
+static double mercatorXfromLng(double lng) {
+    return (180.0 + lng) / 360.0;
+}
+
+static double mercatorYfromLat(double lat) {
+    return (180.0 - (180.0 / M_PI * std::log(std::tan(M_PI_4 + lat * M_PI / 360.0)))) / 360.0;
+}
 
 static double latFromMercatorY(double mercatorY) {
     return 2.0 * std::atan(std::exp(M_PI - mercatorY * 2.0 * M_PI)) - M_PI_2;
@@ -27,9 +38,15 @@ static const double* getColumn(const mat4& matrix, int col) {
     return &matrix[col * 4];
 }
 
-static double computePixelsPerMeter(double mercatorY, double zoom) {
-    const double latitude = latFromMercatorY(mercatorY);
-    return 1.0 / Projection::getMetersPerPixelAtLatitude(latitude, zoom);
+static vec3 toMercator(const LatLng& location, double elevationMeters) {
+    const double pixelsPerMeter = 1.0 / Projection::getMetersPerPixelAtLatitude(location.latitude(), 0.0);
+    const double worldSize = Projection::worldSize(std::pow(2.0, 0));
+
+    return {
+         mercatorXfromLng(location.longitude()),
+         mercatorYfromLat(location.latitude()),
+         elevationMeters * pixelsPerMeter / worldSize
+    };
 }
 
 static mat4 updateCameraTransform(const Quaternion& orientation, const double* translation) {
@@ -46,69 +63,57 @@ static mat4 updateCameraTransform(const Quaternion& orientation, const double* t
     return m;
 }
 
-static void updateTransform(const mat4& camera, bool flipY, mat4& outTransform, mat4& outInvTransform) {
-    mat4 flipMatrix;
-    mat4 zScaleMatrix;
-    
-    matrix::identity(flipMatrix);
-    matrix::scale(flipMatrix, flipMatrix, 1.0, flipY ? 1.0 : -1.0, 1.0);
-
-    // TODO: Remove scale from here!
-    matrix::identity(zScaleMatrix);
-    matrix::scale(zScaleMatrix, zScaleMatrix, 1.0, 1.0, 1.0);
-
-    // camera matrix transform camera from local coordinate space to world.
-    // Elevation scale matrix transforms renderables to world space as well.
-    // This means that for full camera->world transformation we need:
-    // outTransform = (flip * cam^-1 * zScale)^-1 => (zScale^-1 * cam * flip^-1)
-    
-    mat4 invCameraTransform;
-    matrix::invert(invCameraTransform, camera);
-
-    matrix::identity(outInvTransform);
-    matrix::multiply(outInvTransform, outInvTransform, flipMatrix);
-    matrix::multiply(outInvTransform, outInvTransform, invCameraTransform);
-    matrix::multiply(outInvTransform, outInvTransform, zScaleMatrix);
-    matrix::invert(outTransform, outInvTransform);
-}
-
 Camera::Camera() : size(0, 0), fovy(1.0), orientation(Quaternion::identity), flippedY(false) {
     matrix::identity(cameraTransform);
-    matrix::identity(transform);
-    matrix::identity(invTransform);
     matrix::identity(projection);
     matrix::identity(invProjection);
 }
 
 const mat4 Camera::getCameraToWorld(double zoom) const {
-    // transform-matrix will transform points from camera space to mercator space
-    // x, y and z coordinates have to be transformed to pixels
     mat4 cameraToWorld;
-
-    const double scale = std::pow(2.0, zoom);
-    const double worldSize = Projection::worldSize(scale);
-    const double pixelsPerMeter = computePixelsPerMeter(getColumn(cameraTransform, 3)[1], zoom);
-
-    // Mercator -> pixel coordinates
-    mat4 mercatorToWorld;
-    mat4 pixelsToMeters;
-    matrix::identity(mercatorToWorld);
-    matrix::identity(pixelsToMeters);
-
-    matrix::scale(mercatorToWorld, mercatorToWorld, worldSize, worldSize, worldSize);
-    matrix::multiply(cameraToWorld, mercatorToWorld, transform);
-
-    // Elevation from pixel -> meters
-    matrix::scale(pixelsToMeters, pixelsToMeters, 1.0, 1.0, 1.0 / pixelsPerMeter);
-    matrix::multiply(cameraToWorld, pixelsToMeters, cameraToWorld);
-
+    matrix::invert(cameraToWorld, getWorldToCamera(zoom));
     return cameraToWorld;
 }
 
 const mat4 Camera::getWorldToCamera(double zoom) const {
-    mat4 matrix;// = getCameraToWorld();
-    matrix::invert(matrix, getCameraToWorld(zoom));
-    return matrix;
+
+    // transformation chain from world space to camera space:
+    // 1. multiply elevation with pixelsPerMeter
+    // 2. Transform from pixel coordinates to camera space with cameraMatrix^1
+    // 3. flip Y if required
+
+    // worldToCamera: flip * cam^-1 * zScale
+    // cameraToWorld: (flip * cam^-1 * zScale)^-1 => (zScale^-1 * cam * flip^-1)
+    mat4 flipMatrix;
+    mat4 zScaleMatrix;
+
+    const double scale = std::pow(2.0, zoom);
+    const double worldSize = Projection::worldSize(scale);
+    const double latitude = latFromMercatorY(getColumn(cameraTransform, 3)[1]);
+    const double pixelsPerMeter = 1.0 / Projection::getMetersPerPixelAtLatitude(latitude, zoom);
+    
+    mat4 camera = cameraTransform;
+    getColumn(camera, 3)[0] *= worldSize;
+    getColumn(camera, 3)[1] *= worldSize;
+    getColumn(camera, 3)[2] *= worldSize;
+
+    matrix::identity(flipMatrix);
+    matrix::scale(flipMatrix, flipMatrix, 1.0, flippedY ? 1.0 : -1.0, 1.0);
+
+    matrix::identity(zScaleMatrix);
+    matrix::scale(zScaleMatrix, zScaleMatrix, 1.0, 1.0, pixelsPerMeter);
+
+    mat4 invCamera;
+    mat4 result;
+
+    matrix::invert(invCamera, camera);
+    matrix::identity(result);
+
+    matrix::multiply(result, result, flipMatrix);
+    matrix::multiply(result, result, invCamera);
+    matrix::multiply(result, result, zScaleMatrix);
+
+    return result;
 }
 
 void Camera::perspective(double fovY, double aspectRatio, double nearZ, double farZ) {
@@ -117,47 +122,52 @@ void Camera::perspective(double fovY, double aspectRatio, double nearZ, double f
     matrix::invert(invProjection, projection);
 }
 
+void Camera::lookAtPoint(const LatLng& location) {
+    // TODO: replace euler angles!
+    const vec3 mercator = toMercator(location, 0.0);
+
+    const double dx = mercator[0] - getColumn(cameraTransform, 3)[0];
+    const double dy = mercator[1] - getColumn(cameraTransform, 3)[1];
+    const double dz = mercator[2] - getColumn(cameraTransform, 3)[2];
+
+    const double rotZ = std::atan2(-dy, dx) - M_PI_2;
+    const double rotX = std::atan2(std::sqrt(dx * dx + dy * dy), -dz);
+    (void)rotZ;
+    (void)rotX;
+
+    Quaternion rotBearing = Quaternion::fromEulerAngles(0.0, 0.0, rotZ);
+    Quaternion rotPitch = Quaternion::fromEulerAngles(rotX, 0.0, 0.0);
+    Quaternion rotation = rotPitch.multiply(rotBearing);
+
+    setOrientation(rotation);
+}
+
 void Camera::setFlippedY(bool flipped) {
     flippedY = flipped;
-    updateTransform(cameraTransform, flippedY, transform, invTransform);
 }
 
 void Camera::setOrientation(const Quaternion& orientation_) {
     orientation = orientation_;
     cameraTransform = updateCameraTransform(orientation, getColumn(cameraTransform, 3));
-    updateTransform(cameraTransform, flippedY, transform, invTransform);
 }
 
-void Camera::setPosition(const vec3& mercatorPosition) {
-    cameraTransform = updateCameraTransform(orientation, mercatorPosition.data());
-    updateTransform(cameraTransform, flippedY, transform, invTransform);
+void Camera::setPosition(const vec3& mercatorLocation) {
+    cameraTransform = updateCameraTransform(orientation, mercatorLocation.data());
 }
 
-void Camera::setPosition(const LatLng& position, double zoom) {
-    const double distanceToMap = 0.5 * size.height / std::tan(fovy / 2.0);
-    // Convert LatLng to pixel coordinates
-    const double worldSize = std::pow(2.0, zoom) * util::tileSize;
-    const double bc = worldSize / util::DEGREES_MAX;
-    const double cc = worldSize / util::M2PI;
+void Camera::setPosition(const LatLng& location, double elevationMeters) {
+    vec3 position = toMercator(location, elevationMeters);
+    cameraTransform = updateCameraTransform(orientation, position.data());
+}
 
-    const double m = 1 - 1e-15;
-    const double f = util::clamp(std::sin(util::DEG2RAD * position.latitude()), -m, m);
-
-    vec3 pixelPos = {
-        -position.longitude() * bc,
-        0.5 * cc * std::log((1 + f) / (1 - f)),
-        distanceToMap
-    };
-
-    const double dx = pixelPos[0] - 0.5 * worldSize;
-    const double dy = pixelPos[1] - 0.5 * worldSize;
-    pixelPos[0] = -dx;
-    pixelPos[1] = -dy;
-    //printf("%f %f\n", dx, dy);
-    //pixelsPerMeter = 1.0 / Projection::getMetersPerPixelAtLatitude(position.latitude(), zoom);
-
-    cameraTransform = updateCameraTransform(orientation, pixelPos.data());
-    updateTransform(cameraTransform, flippedY, transform, invTransform);
+void Camera::setPositionZoom(const LatLng& location, double zoom) {
+    // Pixel distance from camera to map center is always constant. Use this fact to
+    // compute elevation in meters at provided location
+    const double pixelElevation = 0.5 * size.height / std::tan(fovy / 2.0);
+    const double metersPerPixel = Projection::getMetersPerPixelAtLatitude(location.latitude(), zoom);
+    const double meterElevation = pixelElevation * metersPerPixel;
+    
+    return setPosition(location, meterElevation);
 }
 
 void Camera::setSize(const Size& size_) {

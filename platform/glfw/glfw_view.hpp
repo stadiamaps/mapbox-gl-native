@@ -139,6 +139,7 @@ private:
     double lastX = 0, lastY = 0;
 
     double lastClick = -1;
+    double currentTime = 0.0;
 
     std::function<void()> changeStyleCallback;
     std::function<void()> pauseResumeCallback;

@@ -501,7 +501,10 @@ void Map::dumpDebugLogs() const {
 }
 
 util::Camera& Map::overrideCameraControls() {
-    return impl->transform.overrideCameraControls();
+    util::Camera& camera = impl->transform.overrideCameraControls();
+    impl->cameraMutated = true;
+    impl->onUpdate();
+    return camera;
 }
 
 } // namespace mbgl

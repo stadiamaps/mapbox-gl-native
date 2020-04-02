@@ -252,6 +252,7 @@ private:
     void updateMatricesIfNeeded() const;
     bool needsMatricesUpdate() const { return requestMatricesUpdate; }
 
+    void updateCamera() const;
     const mat4& getCoordMatrix() const;
     const mat4& getInvertedMatrix() const;
 

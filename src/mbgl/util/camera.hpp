@@ -24,23 +24,25 @@ public:
     const mat4 getWorldToCamera(double zoom) const;
     const mat4& getCameraToClip() const { return projection; }
 
-    void setFlippedY(bool flipped);
+    void lookAtPoint(const LatLng& location);
 
+    void setFlippedY(bool flipped);
     void setOrientation(const Quaternion& orientation_);
 
     // Set position in mercator coordinates
-    void setPosition(const vec3& mercatorPosition);
+    void setPosition(const vec3& mercatorLocation);
 
-    // Set position in LatLng and elevation in meters
-    void setPosition(const LatLng& position, double zoom);
+    // Set location in LatLng coordinates and elevation in meters
+    void setPosition(const LatLng& location, double elevationMeters);
+
+    // Set location in LatLng. Elevation is deduced from the zoom value
+    void setPositionZoom(const LatLng& location, double zoom);
 
 private:
     Size size;
     double fovy;
     Quaternion orientation;
     mat4 cameraTransform;       // Position (mercator) and orientation of the camera
-    mat4 transform;             // Full transformation from camera to world
-    mat4 invTransform;          // Full transformation from world to camera
     mat4 projection;
     mat4 invProjection;
     bool flippedY;

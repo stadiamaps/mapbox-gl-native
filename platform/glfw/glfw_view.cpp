@@ -508,38 +508,46 @@ void GLFWView::onKey(GLFWwindow *window, int key, int /*scancode*/, int action, 
     }
 }
 
+namespace mbgl {
+namespace util {
+
+template<>
+struct Interpolator<mbgl::LatLng> {
+    mbgl::LatLng operator()(const mbgl::LatLng& a, const mbgl::LatLng& b, const double t) {
+        return {
+            interpolate<double>(a.latitude(), b.latitude(), t),
+            interpolate<double>(a.longitude(), b.longitude(), t),
+        };
+    }
+};
+
+}
+}
+
 void GLFWView::showFlybyDemo(double dt) {
+    mbgl::util::Camera& camera = map->overrideCameraControls();
+
     const mbgl::LatLng trainStartPos = { 60.171367, 24.941359 };
     const mbgl::LatLng trainEndPos = { 60.185147, 24.936668 };
     const mbgl::LatLng cameraStartPos = { 60.167443, 24.927176 };
-    const mbgl::LatLng cameraEndPos = { 60.185126, 24.939379 };
+    const mbgl::LatLng cameraEndPos = { 60.190826, 24.940718 };
     const double cameraStartZoom = 15.520899;
-    const double cameraEndZoom = 15.385119;
-    const double duration = 5.0;
+    const double cameraEndZoom = 17.385119;
+    const double duration = 10.0;
 
-    mbgl::util::Camera& camera = map->overrideCameraControls();
-    (void)camera;
-//#error Kameran asennon ei pitäisi muuttua, kun override camera controlsia kutsutaan :/
-//#error Pitäiskö laittaa vaan kamera mercator-koordinaatteihin ja getMatrixX(zoom) ottamaan zoomin parametrina?
     // Interpolate between starting and ending points
     flyByDemoPhase += dt / duration;
 
-    auto trainLat = mbgl::util::interpolate(trainStartPos.latitude(), trainEndPos.latitude(), flyByDemoPhase);
-    auto trainLng = mbgl::util::interpolate(trainStartPos.longitude(), trainEndPos.longitude(), flyByDemoPhase);
-
-    auto cameraLat = mbgl::util::interpolate(cameraStartPos.latitude(), cameraEndPos.latitude(), flyByDemoPhase);
-    auto cameraLng = mbgl::util::interpolate(cameraStartPos.longitude(), cameraEndPos.longitude(), flyByDemoPhase);
+    auto trainPos = mbgl::util::interpolate(trainStartPos, trainEndPos, flyByDemoPhase);
+    auto cameraPos = mbgl::util::interpolate(cameraStartPos, cameraEndPos, flyByDemoPhase);
     auto cameraZoom = mbgl::util::interpolate(cameraStartZoom, cameraEndZoom, flyByDemoPhase);
 
+    camera.setPositionZoom(cameraPos, cameraZoom);
+    camera.lookAtPoint(trainPos);
+
+    // Zoom is a property of the map so update it separately.
     mbgl::CameraOptions o;
-    camera.setPosition(mbgl::LatLng{cameraLat, cameraLng}, cameraZoom);
-    map->jumpTo(o.withZoom(cameraZoom));//.withCenter(mbgl::LatLng{cameraLat, cameraLng}));
-    //printf("%f %f\n", cameraLat, cameraLng);
-    (void)trainLat;
-    (void)trainLng;
-    //camera.lookAt(mbgl::LatLng{trainLat, trainLng});
-    // camera start --lat="60.167443" --lon="24.927176" --zoom="14.840875"
-    // camera end --lat="60.185126" --lon="24.939379" --zoom="16.877620" --bearing "-139.093001"
+    map->jumpTo(o.withZoom(cameraZoom));
 
     if (flyByDemoPhase > 1.0)
         flyByDemoPhase = -1.0;
@@ -895,8 +903,10 @@ void GLFWView::run() {
 
             if (flyByDemoPhase >= 0.0) {
 
-                showFlybyDemo(0.016);
+                showFlybyDemo(glfwGetTime() - currentTime);
             }
+
+            currentTime = glfwGetTime();
 
             mbgl::gfx::BackendScope scope { backend->getRendererBackend() };
 
@@ -934,14 +944,14 @@ void GLFWView::report(float duration) {
     frames++;
     frameTime += duration;
 
-    const double currentTime = glfwGetTime();
-    if (currentTime - lastReported >= 1) {
+    const double now = glfwGetTime();
+    if (now - lastReported >= 1) {
         frameTime /= frames;
         mbgl::Log::Info(mbgl::Event::OpenGL, "Frame time: %6.2fms (%6.2f fps)", frameTime,
             1000 / frameTime);
         frames = 0;
         frameTime = 0;
-        lastReported = currentTime;
+        lastReported = now;
     }
 }
 
