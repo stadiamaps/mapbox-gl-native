@@ -519,7 +519,8 @@ void GLFWView::showFlybyDemo(double dt) {
 
     mbgl::util::Camera& camera = map->overrideCameraControls();
     (void)camera;
-
+//#error Kameran asennon ei pitäisi muuttua, kun override camera controlsia kutsutaan :/
+//#error Pitäiskö laittaa vaan kamera mercator-koordinaatteihin ja getMatrixX(zoom) ottamaan zoomin parametrina?
     // Interpolate between starting and ending points
     flyByDemoPhase += dt / duration;
 

@@ -100,7 +100,7 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
     const double furthestDistance = cameraToCenterDistance / (1 - tanMultiple);
     // Add a bit extra to avoid precision problems when a fragment's distance is exactly `furthestDistance`
     const double farZ = furthestDistance * 1.01;
-    const double pixelsPerMeters = 1.0 / Projection::getMetersPerPixelAtLatitude(getLatLng(LatLng::Unwrapped).latitude(), getZoom());
+    //const double pixelsPerMeters = 1.0 / Projection::getMetersPerPixelAtLatitude(getLatLng(LatLng::Unwrapped).latitude(), getZoom());
     const bool flippedY = viewportMode == ViewportMode::FlippedY;
 
     const double dx = x - 0.5 * Projection::worldSize(scale);
@@ -124,12 +124,19 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
         orbitPosition = orbitRotation.transform(orbitPosition);
         vec3 cameraPosition = {-dx + orbitPosition[0], -dy - orbitPosition[1], orbitPosition[2]};
 
-        camera.setPosition(cameraPosition, pixelsPerMeters);
+        cameraPosition[0] /= Projection::worldSize(scale);
+        cameraPosition[1] /= Projection::worldSize(scale);
+        cameraPosition[2] /= Projection::worldSize(scale);
+
+        cameraPosition[0] = 0.5;
+        cameraPosition[1] = 0.5;
+
+        camera.setPosition(cameraPosition);
         camera.setOrientation(rotation);
     }
 
     // Compute transformation matrix from world to clip
-    mat4 worldToCamera = camera.getWorldToCamera();
+    mat4 worldToCamera = camera.getWorldToCamera(getZoom());
     mat4 cameraToClip = camera.getCameraToClip();
 
     matrix::multiply(projMatrix, cameraToClip, worldToCamera);
