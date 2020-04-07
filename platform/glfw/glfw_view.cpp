@@ -495,28 +495,29 @@ void GLFWView::onKey(GLFWwindow *window, int key, int /*scancode*/, int action, 
             s2->setGeoJSON(route);
             view->map->getStyle().addSource(std::move(s2));
 
-//            auto fillLayer = std::make_unique<mbgl::style::FillLayer>("fill", "polygon");
-//            fillLayer->setFillColor(mbgl::Color::black());
-//            fillLayer->setFillOpacity(0.1);
-//            view->map->getStyle().addLayer(std::move(fillLayer));
+            //            auto fillLayer = std::make_unique<mbgl::style::FillLayer>("fill", "polygon");
+            //            fillLayer->setFillColor(mbgl::Color::black());
+            //            fillLayer->setFillOpacity(0.1);
+            //            view->map->getStyle().addLayer(std::move(fillLayer));
 
             auto lineLayer = std::make_unique<mbgl::style::LineLayer>("line", "line");
             lineLayer->setLineColor(mbgl::Color::red());
             view->map->getStyle().addLayer(std::move(lineLayer));
-  
+
             auto &style = view->map->getStyle();
             auto labelLayer = style.getLayer("poi-label");
             if (labelLayer) {
                 auto symbolLayer = static_cast<mbgl::style::SymbolLayer *>(labelLayer);
-//                    std::stringstream ss;
-//                    ss << std::string(R"(["case", ["<", ["distance", )") << mbgl::platform::glfw::route << std::string(R"( ], 100.0], 1, 0.2] )");
-//                    auto expr = createExpression(ss.str().c_str());
-//                    if (expr) {
-////                        symbolLayer->setIconOpacity(PropertyExpression<float>(std::move(expr)));
-//                        symbolLayer->setTextOpacity(PropertyExpression<float>(std::move(expr)));
-//                    }
+                //                    std::stringstream ss;
+                //                    ss << std::string(R"(["case", ["<", ["distance", )") <<
+                //                    mbgl::platform::glfw::route << std::string(R"( ], 100.0], 1, 0.2] )"); auto expr =
+                //                    createExpression(ss.str().c_str()); if (expr) {
+                ////                        symbolLayer->setIconOpacity(PropertyExpression<float>(std::move(expr)));
+                //                        symbolLayer->setTextOpacity(PropertyExpression<float>(std::move(expr)));
+                //                    }
                 std::stringstream ss;
-                ss << std::string(R"([ "<" , ["distance", )") << mbgl::platform::glfw::route << std::string(R"( ], 100])");
+                ss << std::string(R"([ "<" , ["distance", )") << mbgl::platform::glfw::route
+                   << std::string(R"( ], 100])");
                 auto expr = createExpression(ss.str().c_str());
                 if (expr) {
                     symbolLayer->setFilter(Filter(std::move(expr)));
