@@ -3,7 +3,6 @@
 #include <mapbox/cheap_ruler.hpp>
 #include <mbgl/style/expression/expression.hpp>
 #include <mbgl/util/geojson.hpp>
-#include <mbgl/util/optional.hpp>
 
 namespace mbgl {
 namespace style {
