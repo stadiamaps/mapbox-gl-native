@@ -70,7 +70,7 @@ void TransformState::setProperties(const TransformStateProperties& properties) {
 
 void TransformState::matrixFor(mat4& matrix, const UnwrappedTileID& tileID) const {
     const uint64_t tileScale = 1ull << tileID.canonical.z;
-    const double s = Projection::worldSize(scale) / tileScale;
+    const double s = Projection::worldSize(camera.getScale()) / tileScale;
 
     matrix::identity(matrix);
     matrix::translate(matrix,
@@ -103,26 +103,20 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
     const double furthestDistance = cameraToCenterDistance / (1 - tanMultiple) * 8.0;
     // Add a bit extra to avoid precision problems when a fragment's distance is exactly `furthestDistance`
     const double farZ = furthestDistance * 1.01;
-    //const double pixelsPerMeters = 1.0 / Projection::getMetersPerPixelAtLatitude(getLatLng(LatLng::Unwrapped).latitude(), getZoom());
-    const bool flippedY = viewportMode == ViewportMode::FlippedY;
-
-    const double worldSize = Projection::worldSize(scale);
-    const double dx = x - 0.5 * worldSize;
-    const double dy = x - 0.5 * worldSize;
-
-    // Create transformation using camera class
-    camera.perspective(getFieldOfView(), double(size.width) / size.height, nearZ, farZ);
-    camera.setFlippedY(flippedY);
 
     if (!overrideCameraControls) {
         updateCameraState();
-    } else {
-        printf("zoom %f\n", camera.getZoom());
+    } else
+    {
     }
+    
 
     // Compute transformation matrix from world to clip
     mat4 worldToCamera = camera.getWorldToCamera();
-    mat4 cameraToClip = camera.getCameraToClip();
+    mat4 cameraToClip;
+
+    matrix::identity(cameraToClip);
+    matrix::perspective(cameraToClip, getFieldOfView(), double(size.width) / size.height, nearZ, farZ);
 
     matrix::multiply(projMatrix, cameraToClip, worldToCamera);
 
@@ -132,6 +126,10 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
     // is an odd integer to preserve rendering to the pixel grid. We're rotating this shift based on the angle
     // of the transformation so that 0°, 90°, 180°, and 270° rasters are crisp, and adjust the shift so that
     // it is always <= 0.5 pixels.
+    const double worldSize = Projection::worldSize(camera.getScale());
+    const double dx = x - 0.5 * worldSize;
+    const double dy = x - 0.5 * worldSize;
+
     if (aligned) {
         const float xShift = float(size.width % 2) / 2;
         const float yShift = float(size.height % 2) / 2;
@@ -145,8 +143,13 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
 }
 
 void TransformState::updateCameraState() const {
+    const double worldSize = Projection::worldSize(camera.getScale());
     const double cameraToCenterDistance = getCameraToCenterDistance();
-    const double worldSize = Projection::worldSize(scale);
+
+    // Update camera position to match the transform state
+    camera.setFlippedY(viewportMode == ViewportMode::FlippedY);
+    camera.setFovY(getFieldOfView());
+    camera.setSize(size);
 
     // x & y tracks the center of the map in pixels. However as rendering is done in pixel coordinates the rendering
     // origo is actually in the middle of the map (0.5 * worldSize). x&y positions have to be negated because it defines
@@ -165,11 +168,14 @@ void TransformState::updateCameraState() const {
     cameraPosition[1] /= worldSize;
     cameraPosition[2] /= worldSize;
 
+    auto zoom = camera.getZoom();
     camera.setPosition(cameraPosition);
-    camera.setZoom(getZoom());
+    camera.setZoom(zoom);
 }
 
 util::Camera& TransformState::requestCameraControls() {
+    if (!overrideCameraControls)
+        updateCameraState();
     overrideCameraControls = true;
     return camera;
 }
@@ -226,7 +232,6 @@ Size TransformState::getSize() const {
 void TransformState::setSize(const Size& size_) {
     if (size != size_) {
         size = size_;
-        camera.setSize(size);
         requestMatricesUpdate = true;
     }
 }
@@ -309,19 +314,22 @@ LatLng TransformState::getLatLng(LatLng::WrapMode wrapMode) const {
 }
 
 double TransformState::pixel_x() const {
-    const double center = (size.width - Projection::worldSize(scale)) / 2;
+    const double center = (size.width - Projection::worldSize(camera.getScale())) / 2;
     return center + x;
 }
 
 double TransformState::pixel_y() const {
-    const double center = (size.height - Projection::worldSize(scale)) / 2;
+    const double center = (size.height - Projection::worldSize(camera.getScale())) / 2;
     return center + y;
 }
 
 #pragma mark - Zoom
 
 double TransformState::getZoom() const {
-    return scaleZoom(scale);
+    return camera.getZoom();
+    // if (overrideCameraControls)
+    //     return camera.getZoom();
+    // return scaleZoom(scale);
 }
 
 uint8_t TransformState::getIntegerZoom() const {
@@ -396,12 +404,15 @@ double TransformState::getMaxPitch() const {
 
 #pragma mark - Scale
 double TransformState::getScale() const {
-    return scale;
+    return camera.getScale();
+    // if (overrideCameraControls)
+    //     return std::pow(2.0, camera.getZoom());
+    // return scale;
 }
 
 void TransformState::setScale(double val) {
-    if (scale != val) {
-        scale = val;
+    if (camera.getScale() != val) {
+        camera.setScale(val);
         requestMatricesUpdate = true;
     }
 }
@@ -536,7 +547,7 @@ ScreenCoordinate TransformState::latLngToScreenCoordinate(const LatLng& latLng, 
         return {};
     }
 
-    Point<double> pt = Projection::project(latLng, scale) / util::tileSize;
+    Point<double> pt = Projection::project(latLng, camera.getScale()) / util::tileSize;
     vec4 c = {{pt.x, pt.y, 0, 1}};
     matrix::transformMat4(p, c, getCoordMatrix());
     return {p[0] / p[3], size.height - p[1] / p[3]};
@@ -572,7 +583,7 @@ TileCoordinate TransformState::screenCoordinateToTileCoordinate(const ScreenCoor
     double z1 = coord1[2] / w1;
     double t = z0 == z1 ? 0 : (targetZ - z0) / (z1 - z0);
 
-    Point<double> p = util::interpolate(p0, p1, t) / scale * static_cast<double>(1 << atZoom);
+    Point<double> p = util::interpolate(p0, p1, t) / camera.getScale() * static_cast<double>(1 << atZoom);
     return {{p.x, p.y}, static_cast<double>(atZoom)};
 }
 
@@ -628,10 +639,10 @@ ScreenCoordinate TransformState::getCenterOffset() const {
 }
 
 void TransformState::moveLatLng(const LatLng& latLng, const ScreenCoordinate& anchor) {
-    auto centerCoord = Projection::project(getLatLng(LatLng::Unwrapped), scale);
-    auto latLngCoord = Projection::project(latLng, scale);
-    auto anchorCoord = Projection::project(screenCoordinateToLatLng(anchor), scale);
-    setLatLngZoom(Projection::unproject(centerCoord + latLngCoord - anchorCoord, scale), getZoom());
+    auto centerCoord = Projection::project(getLatLng(LatLng::Unwrapped), camera.getScale());
+    auto latLngCoord = Projection::project(latLng, camera.getScale());
+    auto anchorCoord = Projection::project(screenCoordinateToLatLng(anchor), camera.getScale());
+    setLatLngZoom(Projection::unproject(centerCoord + latLngCoord - anchorCoord, camera.getScale()), getZoom());
 }
 
 void TransformState::setLatLngZoom(const LatLng& latLng, double zoom) {
@@ -658,12 +669,13 @@ void TransformState::setScalePoint(const double newScale, const ScreenCoordinate
     ScreenCoordinate constrainedPoint = point;
     constrain(constrainedScale, constrainedPoint.x, constrainedPoint.y);
 
-    scale = constrainedScale;
+    //scale = constrainedScale;
+    camera.setScale(constrainedScale);
 
     x = constrainedPoint.x;
     y = constrainedPoint.y;
-    Bc = Projection::worldSize(scale) / util::DEGREES_MAX;
-    Cc = Projection::worldSize(scale) / util::M2PI;
+    Bc = Projection::worldSize(camera.getScale()) / util::DEGREES_MAX;
+    Cc = Projection::worldSize(camera.getScale()) / util::M2PI;
     requestMatricesUpdate = true;
 }
 
@@ -683,7 +695,7 @@ float TransformState::maxPitchScaleFactor() const {
     }
     auto latLng = screenCoordinateToLatLng({ 0, static_cast<float>(getSize().height) });
 
-    Point<double> pt = Projection::project(latLng, scale) / util::tileSize;
+    Point<double> pt = Projection::project(latLng, camera.getScale()) / util::tileSize;
     vec4 p = {{ pt.x, pt.y, 0, 1 }};
     vec4 topPoint;
     matrix::transformMat4(topPoint, p, getCoordMatrix());

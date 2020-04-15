@@ -485,7 +485,10 @@ void GLFWView::onKey(GLFWwindow *window, int key, int /*scancode*/, int action, 
             view->toggleLocationIndicatorLayer();
         } break;
         case GLFW_KEY_Y: {
-            view->flyByDemoPhase = 0;
+            if (view->flyByDemoPhase >= 0)
+                view->flyByDemoPhase = -1;
+            else
+                view->flyByDemoPhase = 0;
         } break;
         }
     }
@@ -542,9 +545,21 @@ void GLFWView::showFlybyDemo(double dt) {
     auto cameraPos = mbgl::util::interpolate(cameraStartPos, cameraEndPos, flyByDemoPhase);
     auto cameraZoom = mbgl::util::interpolate(cameraStartZoom, cameraEndZoom, flyByDemoPhase);
 
+    auto cam = map->getCameraOptions();
+
+    //camera.setPositionZoom(cam.center.value_or(mbgl::LatLng{ 0, 0 }), cam.zoom.value_or(1.0));
+    //camera.setPositionZoom(mbgl::LatLng{ 0, 0 }, 1.5);// mbgl::util::interpolate(1.0, 2.0, flyByDemoPhase));
+
+    // --lat="60.173184" --lon="24.943456" --zoom="16.385125"
+    //camera.setPositionZoom({ 60.173184, 24.943456 }, 16.385125);
     camera.setPositionZoom(cameraPos, cameraZoom);
     camera.lookAtPoint(trainPos);
 
+    // Zoom is a property of the map so update it separately.
+    //mbgl::CameraOptions o;
+    //map->jumpTo(o.withZoom(cameraZoom));
+    //map->requestCameraControls();
+    
     if (flyByDemoPhase > 1.0) {
         flyByDemoPhase = -1.0;
         map->releaseCameraControls();

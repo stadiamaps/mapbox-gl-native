@@ -16,17 +16,18 @@ public:
     // Update screen size
     void setSize(const Size& size_);
 
-    // Sets perspective projection for the camera
-    void perspective(double fovY, double aspectRatio, double nearZ, double farZ);
-
     vec3 getPosition() const;
     const Quaternion& getOrientation() const { return orientation; }
     const mat4 getCameraToWorld() const;
     const mat4 getWorldToCamera() const;
-    const mat4& getCameraToClip() const { return projection; }
 
+    double getScale() const;
+    void setScale(double scale);
     double getZoom() const;
     void setZoom(double zoom);
+
+    double getFovY() const;
+    void setFovY(double fov);
 
     // Forward direction of the camera. Default value with no rotation is [0, 0, -1]
     vec3 forward() const;
@@ -53,8 +54,6 @@ private:
     double fovy;
     Quaternion orientation;
     mat4 cameraTransform;       // Position (mercator) and orientation of the camera
-    mat4 projection;
-    mat4 invProjection;
     bool flippedY;
     double zoom;
 };

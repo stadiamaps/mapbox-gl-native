@@ -31,13 +31,6 @@ static const double* getColumn(const mat4& matrix, int col) {
     return &matrix[col * 4];
 }
 
-static double handednessFactor(const mat4& projectionMatrix) {
-    // Return z-scale value of the projection matrix.
-    // This is -1 for right handed projection matrices and
-    // +1 for left handed matrices
-    return getColumn(projectionMatrix, 2)[3];
-}
-
 static vec3 toMercator(const LatLng& location, double elevationMeters) {
     const double pixelsPerMeter = 1.0 / Projection::getMetersPerPixelAtLatitude(location.latitude(), 0.0);
     const double worldSize = Projection::worldSize(std::pow(2.0, 0.0));
@@ -65,8 +58,6 @@ static mat4 updateCameraTransform(const Quaternion& orientation, const double* t
 
 Camera::Camera() : size(0, 0), fovy(1.0), orientation(Quaternion::identity), flippedY(false), zoom(0.0) {
     matrix::identity(cameraTransform);
-    matrix::identity(projection);
-    matrix::identity(invProjection);
 }
 
 vec3 Camera::getPosition() const {
@@ -86,6 +77,14 @@ const mat4 Camera::getCameraToWorld() const {
     mat4 cameraToWorld;
     matrix::invert(cameraToWorld, getWorldToCamera());
     return cameraToWorld;
+}
+
+double Camera::getFovY() const {
+    return fovy;
+}
+
+void Camera::setFovY(double fov) {
+    fovy = fov;
 }
 
 const mat4 Camera::getWorldToCamera() const {
@@ -130,15 +129,22 @@ const mat4 Camera::getWorldToCamera() const {
     return result;
 }
 
+double Camera::getScale() const
+{
+    return std::pow(2.0, zoom);
+}
+
+void Camera::setScale(double scale) {
+    zoom = util::log2(scale);
+}
+
 vec3 Camera::forward() const {
     const double* column = getColumn(cameraTransform, 2);
-    // Front direction is determined by the handedness of the projection matrix.
-    // The default direction should be towards the map, [0, 0, -1]
-    const double scale = handednessFactor(projection);
+    // The forward direction is towards the map, [0, 0, -1]
     return {
-        column[0] * scale,
-        column[1] * scale,
-        column[2] * scale
+        -column[0],
+        -column[1],
+        -column[2]
     };
 }
 
@@ -159,12 +165,6 @@ vec3 Camera::up() const {
         -column[1],
         -column[2]
     };
-}
-
-void Camera::perspective(double fovY, double aspectRatio, double nearZ, double farZ) {
-    fovy = fovY;
-    matrix::perspective(projection, fovY, aspectRatio, nearZ, farZ);
-    matrix::invert(invProjection, projection);
 }
 
 void Camera::lookAtPoint(const LatLng& location) {
