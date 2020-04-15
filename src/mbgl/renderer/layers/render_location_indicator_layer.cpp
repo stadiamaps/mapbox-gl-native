@@ -1,5 +1,6 @@
 #include <array>
 #include <mapbox/cheap_ruler.hpp>
+#include <mbgl/geometry/feature_index.hpp>
 #include <mbgl/gfx/backend_scope.hpp>
 #include <mbgl/gfx/renderer_backend.hpp>
 #include <mbgl/gl/context.hpp>
@@ -338,7 +339,12 @@ public:
         float pixelRatio = 1.0f;
     };
 
-    RenderLocationIndicatorImpl() : ruler(0, mapbox::cheap_ruler::CheapRuler::Meters) {}
+    RenderLocationIndicatorImpl(std::string sourceLayer)
+        : ruler(0, mapbox::cheap_ruler::CheapRuler::Meters),
+          feature(std::make_shared<mbgl::Feature>()),
+          featureEnvelope(std::make_shared<mapbox::geometry::polygon<int64_t>>()) {
+        feature->sourceLayer = std::move(sourceLayer);
+    }
 
     static bool hasAnisotropicFiltering() {
         const auto* extensions = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
@@ -404,7 +410,6 @@ public:
 
         projectionCircle = params.projectionMatrix;
         const Point<double> positionMercator = project(params.puckPosition, *params.state);
-        mat4 translation;
         matrix::identity(translation);
         matrix::translate(translation, translation, positionMercator.x, positionMercator.y, 0.0);
         matrix::multiply(projectionCircle, projectionCircle, translation);
@@ -422,6 +427,25 @@ public:
             }
         }
         oldParams = params;
+        dirtyFeature = true;
+    }
+
+    void updateFeature() {
+        if (!dirtyFeature) return;
+        dirtyFeature = false;
+        featureEnvelope->clear();
+        if (!texPuck || !texPuck->isValid()) return;
+
+        feature->geometry =
+            mapbox::geometry::point<double>{oldParams.puckPosition.latitude(), oldParams.puckPosition.longitude()};
+        mapbox::geometry::linear_ring<int64_t> border;
+        for (const auto& v : puckGeometry) {
+            vec4 p{v.x, v.y, 0, 1};
+            matrix::transformMat4(p, p, translation);
+            border.push_back(Point<int64_t>{int64_t(p[0]), int64_t(p[1])});
+        }
+        border.push_back(border.front());
+        featureEnvelope->push_back(border);
     }
 
 protected:
@@ -682,6 +706,7 @@ protected:
     std::array<vec2, 4> puckGeometry;
     std::array<vec2, 4> hatGeometry;
     std::array<vec2, 4> texCoords;
+    mbgl::mat4 translation;
     mbgl::mat4 projectionCircle;
     mbgl::mat4 projectionPuck;
 
@@ -690,9 +715,12 @@ protected:
     bool bearingChanged = false;
     mbgl::LocationIndicatorRenderParameters oldParams;
     bool initialized = false;
+    bool dirtyFeature = true;
 
 public:
     mbgl::LocationIndicatorRenderParameters parameters;
+    std::shared_ptr<mbgl::Feature> feature;
+    std::shared_ptr<mapbox::geometry::polygon<int64_t>> featureEnvelope;
     static bool anisotropicFilteringAvailable;
 };
 
@@ -709,7 +737,7 @@ inline const LocationIndicatorLayer::Impl& impl(const Immutable<style::Layer::Im
 
 RenderLocationIndicatorLayer::RenderLocationIndicatorLayer(Immutable<style::LocationIndicatorLayer::Impl> _impl)
     : RenderLayer(makeMutable<LocationIndicatorLayerProperties>(std::move(_impl))),
-      renderImpl(new RenderLocationIndicatorImpl()),
+      renderImpl(new RenderLocationIndicatorImpl(impl(baseImpl).id)),
       unevaluated(impl(baseImpl).paint.untransitioned()) {
     assert(gfx::BackendScope::exists());
 }
@@ -802,6 +830,11 @@ void RenderLocationIndicatorLayer::render(PaintParameters& paintParameters) {
     // the viewport or Framebuffer.
     paintParameters.backend.getDefaultRenderable().getResource<gl::RenderableResource>().bind();
     glContext.setDirtyState();
+}
+
+void RenderLocationIndicatorLayer::populateDynamicRenderFeatureIndex(DynamicFeatureIndex& index) const {
+    renderImpl->updateFeature();
+    if (renderImpl->featureEnvelope->size()) index.insert(renderImpl->feature, renderImpl->featureEnvelope);
 }
 
 } // namespace mbgl
