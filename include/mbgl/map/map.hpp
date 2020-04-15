@@ -138,7 +138,8 @@ public:
     bool isFullyLoaded() const;
     void dumpDebugLogs() const;
 
-    util::Camera& overrideCameraControls();
+    util::Camera& requestCameraControls();
+    void releaseCameraControls();
 
 protected:
     class Impl;

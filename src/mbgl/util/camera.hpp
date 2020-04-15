@@ -19,15 +19,25 @@ public:
     // Sets perspective projection for the camera
     void perspective(double fovY, double aspectRatio, double nearZ, double farZ);
 
+    vec3 getPosition() const;
     const Quaternion& getOrientation() const { return orientation; }
-    const mat4 getCameraToWorld(double zoom) const;
-    const mat4 getWorldToCamera(double zoom) const;
+    const mat4 getCameraToWorld() const;
+    const mat4 getWorldToCamera() const;
     const mat4& getCameraToClip() const { return projection; }
+
+    double getZoom() const;
+    void setZoom(double zoom);
+
+    // Forward direction of the camera. Default value with no rotation is [0, 0, -1]
+    vec3 forward() const;
+    vec3 right() const;
+    vec3 up() const;
 
     void lookAtPoint(const LatLng& location);
 
     void setFlippedY(bool flipped);
-    void setOrientation(const Quaternion& orientation_);
+
+    void setOrientation(float pitch, float bearing);
 
     // Set position in mercator coordinates
     void setPosition(const vec3& mercatorLocation);
@@ -36,7 +46,7 @@ public:
     void setPosition(const LatLng& location, double elevationMeters);
 
     // Set location in LatLng. Elevation is deduced from the zoom value
-    void setPositionZoom(const LatLng& location, double zoom);
+    void setPositionZoom(const LatLng& location, double zoom_);
 
 private:
     Size size;
@@ -46,6 +56,7 @@ private:
     mat4 projection;
     mat4 invProjection;
     bool flippedY;
+    double zoom;
 };
 
 }

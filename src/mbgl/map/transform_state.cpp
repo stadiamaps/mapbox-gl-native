@@ -62,8 +62,8 @@ void TransformState::setProperties(const TransformStateProperties& properties) {
         setViewportMode(*properties.viewPortMode);
     }
 
-    if (!overrideControls)
-        updateCamera();
+    if (!overrideCameraControls)
+        updateCameraState();
 }
 
 #pragma mark - Matrix
@@ -114,12 +114,14 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
     camera.perspective(getFieldOfView(), double(size.width) / size.height, nearZ, farZ);
     camera.setFlippedY(flippedY);
 
-    if (!overrideControls) {
-        updateCamera();
+    if (!overrideCameraControls) {
+        updateCameraState();
+    } else {
+        printf("zoom %f\n", camera.getZoom());
     }
 
     // Compute transformation matrix from world to clip
-    mat4 worldToCamera = camera.getWorldToCamera(getZoom());
+    mat4 worldToCamera = camera.getWorldToCamera();
     mat4 cameraToClip = camera.getCameraToClip();
 
     matrix::multiply(projMatrix, cameraToClip, worldToCamera);
@@ -142,7 +144,7 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
     }
 }
 
-void TransformState::updateCamera() const {
+void TransformState::updateCameraState() const {
     const double cameraToCenterDistance = getCameraToCenterDistance();
     const double worldSize = Projection::worldSize(scale);
 
@@ -152,33 +154,32 @@ void TransformState::updateCamera() const {
     const double dx = 0.5 * worldSize - x;
     const double dy = 0.5 * worldSize - y;
 
-    vec3 orbitPosition = {0.0, 0.0, cameraToCenterDistance};
+    // Set camera orientation and move it to a proper distance from the map
+    camera.setOrientation(getPitch(), getBearing());
 
-    // Order of multiplication is important here as we want to apply bearing before pitch
-    Quaternion rotBearing = Quaternion::fromEulerAngles(0.0, 0.0, getBearing());
-    Quaternion rotPitch = Quaternion::fromEulerAngles(getPitch(), 0.0, 0.0);
-    Quaternion rotation = rotPitch.multiply(rotBearing);
-
-    // TransformState still tracks the focus point on the map. Camera have to be placed above the map
-    // looking at the focus point. Distance between camera and focus point is getCameraToCenterDistance() in pixels.
-    // We'll first find orbital position of the camera using origo by applying bearing and pitch to a point orbiting origo.
-    // Final camera position is found by adding center position of the map
-    Quaternion orbitRotation = rotBearing.multiply(rotPitch);
-
-    orbitPosition = orbitRotation.transform(orbitPosition);
-    vec3 cameraPosition = {dx + orbitPosition[0], dy - orbitPosition[1], orbitPosition[2]};
+    const vec3 forward = camera.forward();
+    const vec3 orbitPosition = { -forward[0] * cameraToCenterDistance, -forward[1] * cameraToCenterDistance, -forward[2] * cameraToCenterDistance };
+    vec3 cameraPosition = {dx + orbitPosition[0], dy + orbitPosition[1], orbitPosition[2]};
 
     cameraPosition[0] /= worldSize;
     cameraPosition[1] /= worldSize;
     cameraPosition[2] /= worldSize;
 
     camera.setPosition(cameraPosition);
-    camera.setOrientation(rotation);
+    camera.setZoom(getZoom());
 }
 
-util::Camera& TransformState::overrideCameraControls() {
-    overrideControls = true;
+util::Camera& TransformState::requestCameraControls() {
+    overrideCameraControls = true;
     return camera;
+}
+
+void TransformState::releaseCameraControls() {
+    if (overrideCameraControls) {
+        // Reconstruct transform state from the camera position
+    }
+
+    overrideCameraControls = false;
 }
 
 void TransformState::updateMatricesIfNeeded() const {
@@ -687,11 +688,6 @@ float TransformState::maxPitchScaleFactor() const {
     vec4 topPoint;
     matrix::transformMat4(topPoint, p, getCoordMatrix());
     return topPoint[3] / getCameraToCenterDistance();
-}
-
-double TransformState::getScaleForElevation(double meters) const {
-    (void)meters;
-    return 0.0;
 }
 
 } // namespace mbgl

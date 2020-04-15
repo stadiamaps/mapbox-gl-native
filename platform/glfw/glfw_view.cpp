@@ -525,7 +525,7 @@ struct Interpolator<mbgl::LatLng> {
 }
 
 void GLFWView::showFlybyDemo(double dt) {
-    mbgl::util::Camera& camera = map->overrideCameraControls();
+    mbgl::util::Camera& camera = map->requestCameraControls();
 
     const mbgl::LatLng trainStartPos = { 60.171367, 24.941359 };
     const mbgl::LatLng trainEndPos = { 60.185147, 24.936668 };
@@ -533,7 +533,7 @@ void GLFWView::showFlybyDemo(double dt) {
     const mbgl::LatLng cameraEndPos = { 60.190826, 24.940718 };
     const double cameraStartZoom = 15.520899;
     const double cameraEndZoom = 17.385119;
-    const double duration = 10.0;
+    const double duration = 4.0;
 
     // Interpolate between starting and ending points
     flyByDemoPhase += dt / duration;
@@ -545,12 +545,10 @@ void GLFWView::showFlybyDemo(double dt) {
     camera.setPositionZoom(cameraPos, cameraZoom);
     camera.lookAtPoint(trainPos);
 
-    // Zoom is a property of the map so update it separately.
-    mbgl::CameraOptions o;
-    map->jumpTo(o.withZoom(cameraZoom));
-
-    if (flyByDemoPhase > 1.0)
+    if (flyByDemoPhase > 1.0) {
         flyByDemoPhase = -1.0;
+        map->releaseCameraControls();
+    }
 }
 
 mbgl::Color GLFWView::makeRandomColor() const {

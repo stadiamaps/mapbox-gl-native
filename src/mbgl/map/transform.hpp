@@ -116,7 +116,8 @@ public:
     ScreenCoordinate latLngToScreenCoordinate(const LatLng&) const;
     LatLng screenCoordinateToLatLng(const ScreenCoordinate&, LatLng::WrapMode = LatLng::Wrapped) const;
 
-    util::Camera& overrideCameraControls();
+    util::Camera& requestCameraControls();
+    void releaseCameraControls();
 
 private:
     MapObserver& observer;

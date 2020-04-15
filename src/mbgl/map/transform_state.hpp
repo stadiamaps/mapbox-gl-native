@@ -209,7 +209,6 @@ public:
 
     float getCameraToTileDistance(const UnwrappedTileID&) const;
     float maxPitchScaleFactor() const;
-    double getScaleForElevation(double meters) const;
 
     /** Recenter the map so that the given coordinate is located at the given
         point on screen. */
@@ -220,7 +219,8 @@ public:
     const mat4& getProjectionMatrix() const;
     const mat4& getInvProjectionMatrix() const;
 
-    util::Camera& overrideCameraControls();
+    util::Camera& requestCameraControls();
+    void releaseCameraControls();
 
 private:
     bool rotatedNorth() const;
@@ -252,7 +252,7 @@ private:
     void updateMatricesIfNeeded() const;
     bool needsMatricesUpdate() const { return requestMatricesUpdate; }
 
-    void updateCamera() const;
+    void updateCameraState() const;
     const mat4& getCoordMatrix() const;
     const mat4& getInvertedMatrix() const;
 
@@ -265,7 +265,7 @@ private:
     bool scaling = false;
     bool panning = false;
     bool gestureInProgress = false;
-    bool overrideControls = false;
+    bool overrideCameraControls = false;
 
     // map position
     mutable double x = 0, y = 0;

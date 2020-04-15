@@ -22,18 +22,18 @@ Quaternion Quaternion::fromAxisAngle(const vec3& axis, double angleRad) {
 }
 
 Quaternion Quaternion::fromEulerAngles(double x, double y, double z) {
-    double cy = std::cos(z * 0.5);
-    double sy = std::sin(z * 0.5);
-    double cp = std::cos(y * 0.5);
-    double sp = std::sin(y * 0.5);
-    double cr = std::cos(x * 0.5);
-    double sr = std::sin(x * 0.5);
+    double cz = std::cos(z * 0.5);
+    double sz = std::sin(z * 0.5);
+    double cy = std::cos(y * 0.5);
+    double sy = std::sin(y * 0.5);
+    double cx = std::cos(x * 0.5);
+    double sx = std::sin(x * 0.5);
 
     Quaternion q;
-    q.s = cy * cp * cr + sy * sp * sr;
-    q.x = cy * cp * sr - sy * sp * cr;
-    q.y = sy * cp * sr + cy * sp * cr;
-    q.z = sy * cp * cr - cy * sp * sr;
+    q.x = sx * cy * cz - cx * sy * sz;
+    q.y = cx * sy * cz + sx * cy * sz;
+    q.z = cx * cy * sz - sx * sy * cz;
+    q.s = cx * cy * cz + sx * sy * sz;
 
     return q;
 }
@@ -72,13 +72,15 @@ mat4 Quaternion::toRotationMatrix() const
     const double tzz = tz * z;
 
     mat[0] = 1.0 - (tyy + tzz);
-    mat[1] = txy - twz;
-    mat[2] = txz + twy;
-    mat[4] = txy + twz;
+    mat[4] = txy - twz;
+    mat[8] = txz + twy;
+
+    mat[1] = txy + twz;
     mat[5] = 1.0 - (txx + tzz);
-    mat[6] = tyz - twx;
-    mat[8] = txz - twy;
-    mat[9] = tyz + twx;
+    mat[9] = tyz - twx;
+    
+    mat[2] = txz - twy;
+    mat[6] = tyz + twx;
     mat[10] = 1.0 - (txx + tyy);
 
     return mat;
