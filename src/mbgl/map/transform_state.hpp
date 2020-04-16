@@ -219,8 +219,8 @@ public:
     const mat4& getProjectionMatrix() const;
     const mat4& getInvProjectionMatrix() const;
 
-    util::Camera& requestCameraControls();
-    void releaseCameraControls();
+    util::Camera getTrueCamera() const;
+    void setTrueCamera(const util::Camera& camera_);
 
 private:
     bool rotatedNorth() const;
@@ -250,9 +250,11 @@ private:
     void setScalePoint(const double scale, const ScreenCoordinate& point);
 
     void updateMatricesIfNeeded() const;
-    bool needsMatricesUpdate() const { return overrideCameraControls || requestMatricesUpdate; }
+    bool needsMatricesUpdate() const { return requestMatricesUpdate; }
 
     void updateCameraState() const;
+    void updateStateFromCamera();
+
     const mat4& getCoordMatrix() const;
     const mat4& getInvertedMatrix() const;
 
@@ -265,7 +267,6 @@ private:
     bool scaling = false;
     bool panning = false;
     bool gestureInProgress = false;
-    bool overrideCameraControls = false;
 
     // map position
     mutable double x = 0, y = 0;
@@ -289,6 +290,7 @@ private:
     double Cc = Projection::worldSize(scale) / util::M2PI;
 
     mutable bool requestMatricesUpdate{true};
+    mutable bool skipCameraSync{false};
     mutable mat4 projectionMatrix;
     mutable mat4 invProjectionMatrix;
     mutable mat4 coordMatrix;

@@ -36,8 +36,8 @@ public:
     // Set position in mercator coordinates
     void setPosition(const vec3& mercatorLocation);
 
-    // Set location in LatLng coordinates and elevation in meters
-    void setPosition(const LatLng& location, double elevationMeters);
+    // Set location in LatLng coordinates and altitude in meters
+    void setPosition(const LatLng& location, double altitudeMeters);
 
     // Set location in LatLng. Elevation is deduced from the zoom value
     void setPositionZoom(const LatLng& location, double zoom);

@@ -500,17 +500,15 @@ void Map::dumpDebugLogs() const {
     Log::Info(Event::General, "--------------------------------------------------------------------------------");
 }
 
-util::Camera& Map::requestCameraControls() {
-    util::Camera& camera = impl->transform.requestCameraControls();
-    impl->cameraMutated = true;
-    impl->onUpdate();
-    return camera;
+util::Camera Map::getTrueCamera() const {
+    return impl->transform.getTrueCamera();
 }
 
-void Map::releaseCameraControls() {
-    impl->transform.releaseCameraControls();
+void Map::setTrueCamera(const util::Camera& camera) {
+    impl->transform.setTrueCamera(camera);
     impl->cameraMutated = true;
     impl->onUpdate();
 }
+
 
 } // namespace mbgl

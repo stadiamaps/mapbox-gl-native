@@ -650,12 +650,15 @@ double Transform::getMaxPitchForEdgeInsets(const EdgeInsets& insets) const {
     // e.g. Maximum pitch of 60 degrees is when perspective center's offset from the top is 84% of screen height.
 }
 
-util::Camera& Transform::requestCameraControls() {
-    return state.requestCameraControls();
+util::Camera Transform::getTrueCamera() {
+    return state.getTrueCamera();
 }
 
-void Transform::releaseCameraControls() {
-    state.releaseCameraControls();
+void Transform::setTrueCamera(const util::Camera& camera) {
+    // Camera has been updated through the true camera api. Cancel all ongoing transitions.
+    // TODO: can user change camera position in animation "onFinishFunc"?
+    cancelTransitions();
+    state.setTrueCamera(camera);
 }
 
 } // namespace mbgl

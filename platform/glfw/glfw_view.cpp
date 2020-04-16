@@ -528,12 +528,12 @@ struct Interpolator<mbgl::LatLng> {
 }
 
 void GLFWView::showFlybyDemo(double dt) {
-    mbgl::util::Camera& camera = map->requestCameraControls();
+    //mbgl::util::Camera& camera = map->requestCameraControls();
 
     const mbgl::LatLng trainStartPos = { 60.171367, 24.941359 };
     const mbgl::LatLng trainEndPos = { 60.185147, 24.936668 };
     const mbgl::LatLng cameraStartPos = { 60.167443, 24.927176 };
-    const mbgl::LatLng cameraEndPos = { 60.190826, 24.940718 };
+    const mbgl::LatLng cameraEndPos = { 60.185107, 24.933366 };
     const double cameraStartZoom = 15.520899;
     const double cameraEndZoom = 17.385119;
     const double duration = 4.0;
@@ -552,18 +552,26 @@ void GLFWView::showFlybyDemo(double dt) {
 
     // --lat="60.173184" --lon="24.943456" --zoom="16.385125"
     //camera.setPositionZoom({ 60.173184, 24.943456 }, 16.385125);
-    camera.setPositionZoom(cameraPos, cameraZoom);
-    camera.lookAtPoint(trainPos);
 
-    // Zoom is a property of the map so update it separately.
-    mbgl::CameraOptions o;
-    map->jumpTo(o.withZoom(cameraZoom));
-    map->requestCameraControls();
+    mbgl::util::Camera camera = map->getTrueCamera();
+
+    printf("pos0 %f %f\n", camera.getPosition()[0], camera.getPosition()[1], camera.getPosition()[2]);
+    //camera.setPositionZoom(cameraPos, cameraZoom);
+    //camera.lookAtPoint(trainPos);
+
+    map->setTrueCamera(camera);
+
+    camera = map->getTrueCamera();
+    printf("pos1 %f %f\n", camera.getPosition()[0], camera.getPosition()[1], camera.getPosition()[2]);
+    //// Zoom is a property of the map so update it separately.
+    //mbgl::CameraOptions o;
+    //map->jumpTo(o.withZoom(cameraZoom));
+    //map->requestCameraControls();
     
-    if (flyByDemoPhase > 1.0) {
+    //if (flyByDemoPhase > 1.0) {
         flyByDemoPhase = -1.0;
-        map->releaseCameraControls();
-    }
+        //map->releaseCameraControls();
+    //}
 }
 
 mbgl::Color GLFWView::makeRandomColor() const {

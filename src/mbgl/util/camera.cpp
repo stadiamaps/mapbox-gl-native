@@ -31,14 +31,14 @@ static const double* getColumn(const mat4& matrix, int col) {
     return &matrix[col * 4];
 }
 
-static vec3 toMercator(const LatLng& location, double elevationMeters) {
+static vec3 toMercator(const LatLng& location, double altitudeMeters) {
     const double pixelsPerMeter = 1.0 / Projection::getMetersPerPixelAtLatitude(location.latitude(), 0.0);
     const double worldSize = Projection::worldSize(std::pow(2.0, 0.0));
 
     return {
          mercatorXfromLng(location.longitude()),
          mercatorYfromLat(location.latitude()),
-         elevationMeters * pixelsPerMeter / worldSize
+         altitudeMeters * pixelsPerMeter / worldSize
     };
 }
 
@@ -187,8 +187,8 @@ void Camera::setPosition(const vec3& mercatorLocation) {
     cameraTransform = updateCameraTransform(orientation, mercatorLocation.data());
 }
 
-void Camera::setPosition(const LatLng& location, double elevationMeters) {
-    setPosition(toMercator(location, elevationMeters));
+void Camera::setPosition(const LatLng& location, double altitudeMeters) {
+    setPosition(toMercator(location, altitudeMeters));
 }
 
 void Camera::setPositionZoom(const LatLng& location, double zoom) {
@@ -196,9 +196,9 @@ void Camera::setPositionZoom(const LatLng& location, double zoom) {
     // Use this fact to compute elevation in meters at the provided location
     const double pixelDistance = 0.5 * size.height / std::tan(fovy / 2.0);
     const double metersPerPixel = Projection::getMetersPerPixelAtLatitude(location.latitude(), zoom);
-    const double meterElevation = pixelDistance * metersPerPixel;
+    const double meterAltitude = pixelDistance * metersPerPixel;
     
-    return setPosition(location, meterElevation);
+    return setPosition(location, meterAltitude);
 }
 
 void Camera::setSize(const Size& size_) {

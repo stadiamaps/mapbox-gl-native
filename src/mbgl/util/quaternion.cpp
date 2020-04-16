@@ -72,18 +72,27 @@ mat4 Quaternion::toRotationMatrix() const
     const double tzz = tz * z;
 
     mat[0] = 1.0 - (tyy + tzz);
-    mat[4] = txy - twz;
-    mat[8] = txz + twy;
-
     mat[1] = txy + twz;
-    mat[5] = 1.0 - (txx + tzz);
-    mat[9] = tyz - twx;
-    
     mat[2] = txz - twy;
+
+    mat[4] = txy - twz;
+    mat[5] = 1.0 - (txx + tzz);
     mat[6] = tyz + twx;
+    
+    mat[8] = txz + twy;
+    mat[9] = tyz - twx;
     mat[10] = 1.0 - (txx + tyy);
 
     return mat;
 }
+
+bool operator!=(const Quaternion& a, const Quaternion& b) {
+    return !(a == b);
+}
+
+bool operator==(const Quaternion& a, const Quaternion& b) {
+    return a.x == b.x && a.y == b.y && a.z == b.z && a.s == b.s;
+}
+
 
 }

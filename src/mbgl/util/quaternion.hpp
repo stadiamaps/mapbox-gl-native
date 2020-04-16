@@ -32,4 +32,7 @@ struct Quaternion{
     static Quaternion identity;
 };
 
+bool operator==(const Quaternion&, const Quaternion&);
+bool operator!=(const Quaternion&, const Quaternion&);
+
 }

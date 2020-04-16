@@ -61,9 +61,6 @@ void TransformState::setProperties(const TransformStateProperties& properties) {
     if (properties.viewPortMode) {
         setViewportMode(*properties.viewPortMode);
     }
-
-    if (!overrideCameraControls)
-        updateCameraState();
 }
 
 #pragma mark - Matrix
@@ -104,12 +101,14 @@ void TransformState::getProjMatrix(mat4& projMatrix, uint16_t nearZ, bool aligne
     // Add a bit extra to avoid precision problems when a fragment's distance is exactly `furthestDistance`
     const double farZ = furthestDistance * 1.01;
 
-    if (!overrideCameraControls) {
-        // TODO: tää pois täältä!
+    if (!skipCameraSync) {
+        // Camera synchronization is not required if the true camera api was used to modify the state
         updateCameraState();
     }
 
-    // Compute transformation matrix from world to clip
+    auto o = camera.getOrientation();
+    //printf("rot %f %f %f %f, %i\n", o.x, o.y, o.z, o.s, (int)skipCameraSync);
+
     mat4 worldToCamera = camera.getWorldToCamera(getZoom(), viewportMode == ViewportMode::FlippedY);
     mat4 cameraToClip = camera.getCameraToClipPerspective(nearZ, farZ);
 
@@ -165,24 +164,67 @@ void TransformState::updateCameraState() const {
     camera.setPosition(cameraPosition);
 }
 
-util::Camera& TransformState::requestCameraControls() {
-    if (!overrideCameraControls)
-        updateCameraState();
-    overrideCameraControls = true;
+void TransformState::updateStateFromCamera() {
+    // TODO: constraint checks
+    
+    const vec3 position = camera.getPosition();
+    const vec3 forward = camera.forward();
+    const vec3 right = camera.right();
+
+    const double dx = forward[0];
+    const double dy = forward[1];
+    const double dz = forward[2];
+    
+    assert(position[2] > 0.0 && dz < 0.0);
+
+    // TODO: kulmia ei voi ottaa frontista koska jos useri kattoo suoraan alas!
+
+    // Compute bearing and pitch
+    const double newBearing = std::atan2(-right[1], right[0]);
+    const double newPitch = std::atan2(std::sqrt(dx * dx + dy * dy), -dz);
+
+    // Compute zoom level from the camera altitude
+    const double centerDistance = getCameraToCenterDistance();
+    const double zoom = util::log2(centerDistance / (position[2] / std::cos(newPitch) * util::tileSize));
+    const double newScale = std::pow(2.0, zoom);
+    const double worldSize = Projection::worldSize(newScale);
+
+    // Compute center point of the map
+    const double travel = -position[2] / dz;
+
+    const ScreenCoordinate mercatorPoint = {
+        position[0] + dx * travel,
+        position[1] + dy * travel
+    };
+    
+    // TODO: bounds.constrain?
+    setScalePoint(newScale, { (0.5 - mercatorPoint.x) * worldSize, (0.5 - mercatorPoint.y) * worldSize});
+
+    setBearing(newBearing);
+    setPitch(newPitch);
+}
+
+util::Camera TransformState::getTrueCamera() const {
+    //updateMatricesIfNeeded();
+    updateCameraState();
     return camera;
 }
 
-void TransformState::releaseCameraControls() {
-    if (overrideCameraControls) {
-        // Reconstruct transform state from the camera position
-    }
-
-    overrideCameraControls = false;
+void TransformState::setTrueCamera(const util::Camera& camera_) {
+    //if (camera.getOrientation() != camera_.getOrientation() || camera.getPosition() != camera_.getPosition()) {
+        // TODO: Check other properties as well or don't expose them to the user
+        camera = camera_;
+        updateStateFromCamera();
+        requestMatricesUpdate = true;
+        skipCameraSync = true;
+    //}
 }
 
 void TransformState::updateMatricesIfNeeded() const {
     if (!needsMatricesUpdate() || size.isEmpty()) return;
 
+    //if (!skipCameraSync)
+    //    updateCameraState();
     getProjMatrix(projectionMatrix);
     coordMatrix = coordinatePointMatrix(projectionMatrix);
 
@@ -193,6 +235,7 @@ void TransformState::updateMatricesIfNeeded() const {
     if (err) throw std::runtime_error("failed to invert coordinatePointMatrix");
 
     requestMatricesUpdate = false;
+    skipCameraSync = false;
 }
 
 const mat4& TransformState::getProjectionMatrix() const {
@@ -651,6 +694,7 @@ void TransformState::setLatLngZoom(const LatLng& latLng, double zoom) {
 }
 
 void TransformState::setScalePoint(const double newScale, const ScreenCoordinate& point) {
+    //printf("P %f %f\n", point.x, point.y);
     double constrainedScale = newScale;
     ScreenCoordinate constrainedPoint = point;
     constrain(constrainedScale, constrainedPoint.x, constrainedPoint.y);
