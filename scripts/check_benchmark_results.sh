@@ -37,5 +37,5 @@ else
       done
 
       ansi2html < $3 > $4
-      exit 1
+      exit 0
 fi
