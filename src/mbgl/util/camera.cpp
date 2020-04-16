@@ -56,7 +56,7 @@ static mat4 updateCameraTransform(const Quaternion& orientation, const double* t
     return m;
 }
 
-Camera::Camera() : size(0, 0), fovy(1.0), orientation(Quaternion::identity), flippedY(false), zoom(0.0) {
+Camera::Camera() : size(0, 0), fovy(1.0), orientation(Quaternion::identity) {
     matrix::identity(cameraTransform);
 }
 
@@ -65,17 +65,9 @@ vec3 Camera::getPosition() const {
     return { p[0], p[1], p[2] };
 }
 
-double Camera::getZoom() const {
-    return zoom;
-}
-
-void Camera::setZoom(double zoom_) {
-    zoom = zoom_;
-}
-
-const mat4 Camera::getCameraToWorld() const {
+mat4 Camera::getCameraToWorld(double zoom, bool flippedY) const {
     mat4 cameraToWorld;
-    matrix::invert(cameraToWorld, getWorldToCamera());
+    matrix::invert(cameraToWorld, getWorldToCamera(zoom, flippedY));
     return cameraToWorld;
 }
 
@@ -87,7 +79,7 @@ void Camera::setFovY(double fov) {
     fovy = fov;
 }
 
-const mat4 Camera::getWorldToCamera() const {
+mat4 Camera::getWorldToCamera(double zoom, bool flippedY) const {
 
     // transformation chain from world space to camera space:
     // 1. Height value (z) of renderables is in meters. Scale z coordinate by pixelsPerMeter
@@ -129,13 +121,14 @@ const mat4 Camera::getWorldToCamera() const {
     return result;
 }
 
-double Camera::getScale() const
-{
-    return std::pow(2.0, zoom);
-}
-
-void Camera::setScale(double scale) {
-    zoom = util::log2(scale);
+mat4 Camera::getCameraToClipPerspective(double nearZ, double farZ) const {
+    mat4 projection;
+    if (!size.isEmpty()) {
+        matrix::perspective(projection, fovy, double(size.width) / size.height, nearZ, farZ);
+    } else {
+        matrix::identity(projection);
+    }
+    return projection;
 }
 
 vec3 Camera::forward() const {
@@ -181,10 +174,6 @@ void Camera::lookAtPoint(const LatLng& location) {
     setOrientation(rotX, rotZ);
 }
 
-void Camera::setFlippedY(bool flipped) {
-    flippedY = flipped;
-}
-
 void Camera::setOrientation(float pitch, float bearing) {
     // Both angles have to be negated to achieve CW rotation around the axis of rotation
     Quaternion rotBearing = Quaternion::fromEulerAngles(0.0, 0.0, -bearing);
@@ -195,10 +184,6 @@ void Camera::setOrientation(float pitch, float bearing) {
 }
 
 void Camera::setPosition(const vec3& mercatorLocation) {
-    const double pixelDistance = 0.5 * size.height / std::tan(fovy / 2.0);
-    const double scale = pixelDistance / (mercatorLocation[2] * util::tileSize);
-
-    zoom = util::log2(scale);
     cameraTransform = updateCameraTransform(orientation, mercatorLocation.data());
 }
 
@@ -206,11 +191,11 @@ void Camera::setPosition(const LatLng& location, double elevationMeters) {
     setPosition(toMercator(location, elevationMeters));
 }
 
-void Camera::setPositionZoom(const LatLng& location, double zoom_) {
+void Camera::setPositionZoom(const LatLng& location, double zoom) {
     // Pixel distance from camera to map center is always constant.
     // Use this fact to compute elevation in meters at the provided location
     const double pixelDistance = 0.5 * size.height / std::tan(fovy / 2.0);
-    const double metersPerPixel = Projection::getMetersPerPixelAtLatitude(location.latitude(), zoom_);
+    const double metersPerPixel = Projection::getMetersPerPixelAtLatitude(location.latitude(), zoom);
     const double meterElevation = pixelDistance * metersPerPixel;
     
     return setPosition(location, meterElevation);

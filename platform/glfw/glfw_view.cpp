@@ -556,9 +556,9 @@ void GLFWView::showFlybyDemo(double dt) {
     camera.lookAtPoint(trainPos);
 
     // Zoom is a property of the map so update it separately.
-    //mbgl::CameraOptions o;
-    //map->jumpTo(o.withZoom(cameraZoom));
-    //map->requestCameraControls();
+    mbgl::CameraOptions o;
+    map->jumpTo(o.withZoom(cameraZoom));
+    map->requestCameraControls();
     
     if (flyByDemoPhase > 1.0) {
         flyByDemoPhase = -1.0;

@@ -205,7 +205,7 @@ public:
     double zoomScale(double zoom) const;
     double scaleZoom(double scale) const;
 
-    bool valid() const { return !size.isEmpty() && (camera.getScale() >= min_scale && camera.getScale() <= max_scale); }
+    bool valid() const { return !size.isEmpty() && (scale >= min_scale && scale <= max_scale); }
 
     float getCameraToTileDistance(const UnwrappedTileID&) const;
     float maxPitchScaleFactor() const;
@@ -270,7 +270,7 @@ private:
     // map position
     mutable double x = 0, y = 0;
     double bearing = 0;
-    //mutable double scale = 1;
+    mutable double scale = 1;
     // This fov value is somewhat arbitrary. The altitude of the camera used
     // to be defined as 1.5 screen heights above the ground, which was an
     // arbitrary choice. This is the fov equivalent to that value calculated with:
@@ -285,8 +285,8 @@ private:
     mutable util::Camera camera;
 
     // cache values for spherical mercator math
-    double Bc = Projection::worldSize(1.0) / util::DEGREES_MAX;
-    double Cc = Projection::worldSize(1.0) / util::M2PI;
+    double Bc = Projection::worldSize(scale) / util::DEGREES_MAX;
+    double Cc = Projection::worldSize(scale) / util::M2PI;
 
     mutable bool requestMatricesUpdate{true};
     mutable mat4 projectionMatrix;
