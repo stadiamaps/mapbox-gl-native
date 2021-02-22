@@ -388,6 +388,12 @@ void GeometryTileWorker::parse() {
         if (leaderImpl.getTypeInfo()->layout == LayerTypeInfo::Layout::Required) {
             std::unique_ptr<Layout> layout = LayerManager::get()->createLayout(
                 {parameters, glyphDependencies, imageDependencies, availableImages}, std::move(geometryLayer), group);
+
+            // If layout fails, skip it.
+            if (!layout) {
+                continue;
+            }
+
             if (layout->hasDependencies()) {
                 layouts.push_back(std::move(layout));
             } else {
