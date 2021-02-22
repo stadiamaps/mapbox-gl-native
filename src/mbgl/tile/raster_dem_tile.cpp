@@ -122,4 +122,8 @@ void RasterDEMTile::setNecessity(TileNecessity necessity) {
     loader.setNecessity(necessity);
 }
 
+void RasterDEMTile::setUpdateParameters(const TileUpdateParameters& params) {
+    loader.setUpdateParameters(params);
+}
+
 } // namespace mbgl

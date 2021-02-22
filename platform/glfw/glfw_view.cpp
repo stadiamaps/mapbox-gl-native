@@ -294,6 +294,11 @@ void GLFWView::onKey(GLFWwindow *window, int key, int /*scancode*/, int action, 
         case GLFW_KEY_Q: {
             auto result = view->rendererFrontend->getRenderer()->queryPointAnnotations({ {}, { double(view->getSize().width), double(view->getSize().height) } });
             printf("visible point annotations: %lu\n", result.size());
+            auto features = view->rendererFrontend->getRenderer()->queryRenderedFeatures(
+                mbgl::ScreenBox{{double(view->getSize().width * 0.5), double(view->getSize().height * 0.5)},
+                                {double(view->getSize().width * 0.5 + 1), double(view->getSize().height * 0.5 + 1)}},
+                {});
+            printf("Rendered features at the center of the screen: %lu\n", features.size());
         } break;
         case GLFW_KEY_P:
             view->pauseResumeCallback();
@@ -504,9 +509,9 @@ void GLFWView::onKey(GLFWwindow *window, int key, int /*scancode*/, int action, 
 }
 
 mbgl::Color GLFWView::makeRandomColor() const {
-    const float r = 1.0f * (float(std::rand()) / RAND_MAX);
-    const float g = 1.0f * (float(std::rand()) / RAND_MAX);
-    const float b = 1.0f * (float(std::rand()) / RAND_MAX);
+    const float r = 1.0f * float(std::rand()) / float(RAND_MAX);
+    const float g = 1.0f * float(std::rand()) / float(RAND_MAX);
+    const float b = 1.0f * float(std::rand()) / float(RAND_MAX);
     return { r, g, b, 1.0f };
 }
 

@@ -239,7 +239,9 @@ void Placement::placeSymbolBucket(const BucketPlacementData& params, std::set<ui
                          collisionGroups.get(params.sourceId),
                          getAvoidEdges(symbolBucket, renderTile.matrix)};
     for (const SymbolInstance& symbol : getSortedSymbols(params, ctx.pixelRatio)) {
-        placeSymbol(symbol, ctx, seenCrossTileIDs);
+        if (seenCrossTileIDs.count(symbol.crossTileID) != 0u) continue;
+        placeSymbol(symbol, ctx);
+        seenCrossTileIDs.insert(symbol.crossTileID);
     }
 
     // As long as this placement lives, we have to hold onto this bucket's
@@ -250,18 +252,14 @@ void Placement::placeSymbolBucket(const BucketPlacementData& params, std::set<ui
         std::forward_as_tuple(symbolBucket.bucketInstanceId, params.featureIndex, ctx.getOverscaledID()));
 }
 
-void Placement::placeSymbol(const SymbolInstance& symbolInstance,
-                            const PlacementContext& ctx,
-                            std::set<uint32_t>& seenCrossTileIDs) {
-    if (symbolInstance.crossTileID == SymbolInstance::invalidCrossTileID() ||
-        seenCrossTileIDs.count(symbolInstance.crossTileID) != 0u)
-        return;
+JointPlacement Placement::placeSymbol(const SymbolInstance& symbolInstance, const PlacementContext& ctx) {
+    static const JointPlacement kUnplaced(false, false, false);
+    if (symbolInstance.crossTileID == SymbolInstance::invalidCrossTileID()) return kUnplaced;
 
     if (ctx.getRenderTile().holdForFade()) {
         // Mark all symbols from this tile as "not placed", but don't add to seenCrossTileIDs, because we don't
         // know yet if we have a duplicate in a parent tile that _should_ be placed.
-        placements.emplace(symbolInstance.crossTileID, JointPlacement(false, false, false));
-        return;
+        return kUnplaced;
     }
     const SymbolBucket& bucket = ctx.getBucket();
     const mat4& posMatrix = ctx.getRenderTile().matrix;
@@ -603,13 +601,11 @@ void Placement::placeSymbol(const SymbolInstance& symbolInstance,
         placements.erase(symbolInstance.crossTileID);
     }
 
-    auto pair = placements.emplace(
-        symbolInstance.crossTileID,
-        JointPlacement(
-            placeText || ctx.alwaysShowText, placeIcon || ctx.alwaysShowIcon, offscreen || bucket.justReloaded));
-    assert(pair.second);
-    newSymbolPlaced(symbolInstance, ctx, pair.first->second, ctx.placementType, textBoxes, iconBoxes);
-    seenCrossTileIDs.insert(symbolInstance.crossTileID);
+    JointPlacement result(
+        placeText || ctx.alwaysShowText, placeIcon || ctx.alwaysShowIcon, offscreen || bucket.justReloaded);
+    placements.emplace(symbolInstance.crossTileID, result);
+    newSymbolPlaced(symbolInstance, ctx, result, ctx.placementType, textBoxes, iconBoxes);
+    return result;
 }
 
 namespace {
@@ -1242,11 +1238,12 @@ void StaticPlacement::commit() {
 /// Placement for Tile map mode.
 
 struct Intersection {
-    Intersection(const SymbolInstance& symbol_, PlacementContext ctx_, IntersectStatus status_)
-        : symbol(symbol_), ctx(std::move(ctx_)), status(status_) {}
+    Intersection(const SymbolInstance& symbol_, PlacementContext ctx_, IntersectStatus status_, std::size_t priority_)
+        : symbol(symbol_), ctx(std::move(ctx_)), status(status_), priority(priority_) {}
     std::reference_wrapper<const SymbolInstance> symbol;
     PlacementContext ctx;
     IntersectStatus status;
+    std::size_t priority; // less means more important
 };
 
 class TilePlacement : public StaticPlacement {
@@ -1273,7 +1270,8 @@ private:
                          style::SymbolPlacementType,
                          const std::vector<ProjectedCollisionBox>&,
                          const std::vector<ProjectedCollisionBox>&) override;
-    void populateIntersectingSymbols();
+
+    bool shouldRetryPlacement(const JointPlacement&, const PlacementContext&);
 
     std::unordered_map<uint32_t, bool> locationCache;
     optional<CollisionBoundaries> tileBorders;
@@ -1281,6 +1279,7 @@ private:
     std::vector<PlacedSymbolData> placedSymbolsData;
     std::vector<Intersection> intersections;
     bool populateIntersections = false;
+    std::size_t currentIntersectionPriority{};
     bool collectData = false;
 };
 
@@ -1288,13 +1287,15 @@ void TilePlacement::placeLayers(const RenderLayerReferences& layers) {
     placedSymbolsData.clear();
     seenCrossTileIDs.clear();
     intersections.clear();
+    currentIntersectionPriority = 0u;
     // Populale intersections.
     populateIntersections = true;
     for (auto it = layers.crbegin(); it != layers.crend(); ++it) {
         placeLayer(*it, seenCrossTileIDs);
     }
 
-    std::stable_sort(intersections.begin(), intersections.end(), [](const Intersection& a, const Intersection& b) {
+    std::sort(intersections.begin(), intersections.end(), [](const Intersection& a, const Intersection& b) {
+        if (a.priority != b.priority) return a.priority < b.priority;
         uint8_t flagsA = a.status.flags;
         uint8_t flagsB = b.status.flags;
         // Items arranged as: VerticalBorders & HorizontalBorders (3) ->
@@ -1316,7 +1317,13 @@ void TilePlacement::placeLayers(const RenderLayerReferences& layers) {
     });
     // Place intersections.
     for (const auto& intersection : intersections) {
-        placeSymbol(intersection.symbol, intersection.ctx, seenCrossTileIDs);
+        const SymbolInstance& symbol = intersection.symbol;
+        const PlacementContext& ctx = intersection.ctx;
+        currentIntersectionPriority = intersection.priority;
+        if (seenCrossTileIDs.count(symbol.crossTileID) != 0u) continue;
+        JointPlacement placement = placeSymbol(symbol, ctx);
+        if (shouldRetryPlacement(placement, ctx)) continue;
+        seenCrossTileIDs.insert(symbol.crossTileID);
     }
     // Place the rest labels.
     populateIntersections = false;
@@ -1456,8 +1463,10 @@ void TilePlacement::placeSymbolBucket(const BucketPlacementData& params, std::se
     for (const SymbolInstance& symbol : symbolInstances) {
         auto intersectStatus = symbolIntersectsTileEdges(symbol);
         if (intersectStatus.flags == IntersectStatus::None) continue;
-        intersections.emplace_back(symbol, ctx, intersectStatus);
+        intersections.emplace_back(symbol, ctx, intersectStatus, currentIntersectionPriority);
     }
+
+    ++currentIntersectionPriority;
 }
 
 bool TilePlacement::canPlaceAtVariableAnchor(const CollisionBox& box,
@@ -1467,13 +1476,22 @@ bool TilePlacement::canPlaceAtVariableAnchor(const CollisionBox& box,
                                              const mat4& posMatrix,
                                              float textPixelRatio) {
     assert(tileBorders);
+    if (populateIntersections) {
+        // A variable label is only allowed to intersect tile border with the first anchor.
+        if (anchor == anchors.front()) {
+            // Check, that the label would intersect the tile borders even without shift, otherwise intersection
+            // is not allowed (preventing cut-offs in case the shift is lager than the buffer size).
+            auto status = collisionIndex.intersectsTileEdges(box, {}, posMatrix, textPixelRatio, *tileBorders);
+            if (status.flags != IntersectStatus::None) return true;
+        }
+        // The most important labels shall be placed first anyway, so we continue trying
+        // the following variable anchors for them; less priority labels
+        // will wait for the second round (when `populateIntersections` is `false`).
+        if (currentIntersectionPriority > 0u) return false;
+    }
+    // Can be placed, if it does not intersect tile borders.
     auto status = collisionIndex.intersectsTileEdges(box, shift, posMatrix, textPixelRatio, *tileBorders);
-    if (status.flags == IntersectStatus::None) return true;
-
-    if (anchor != anchors.front()) return false;
-
-    status = collisionIndex.intersectsTileEdges(box, {}, posMatrix, textPixelRatio, *tileBorders);
-    return status.flags != IntersectStatus::None;
+    return (status.flags == IntersectStatus::None);
 }
 
 void TilePlacement::newSymbolPlaced(const SymbolInstance& symbol,
@@ -1482,7 +1500,8 @@ void TilePlacement::newSymbolPlaced(const SymbolInstance& symbol,
                                     style::SymbolPlacementType placementType,
                                     const std::vector<ProjectedCollisionBox>& textCollisionBoxes,
                                     const std::vector<ProjectedCollisionBox>& iconCollisionBoxes) {
-    if (!collectData || placementType != style::SymbolPlacementType::Point) return;
+    if (!collectData || placementType != style::SymbolPlacementType::Point || shouldRetryPlacement(placement, ctx))
+        return;
 
     optional<mapbox::geometry::box<float>> textCollisionBox;
     if (!textCollisionBoxes.empty()) {
@@ -1507,6 +1526,11 @@ void TilePlacement::newSymbolPlaced(const SymbolInstance& symbol,
                                 collisionIndex.getViewportPadding(),
                                 ctx.getBucket().bucketLeaderID};
     placedSymbolsData.emplace_back(std::move(symbolData));
+}
+
+bool TilePlacement::shouldRetryPlacement(const JointPlacement& placement, const PlacementContext& ctx) {
+    // We re-try the placement to try out remaining variable anchors.
+    return populateIntersections && !placement.placed() && !ctx.getVariableTextAnchors().empty();
 }
 
 // static

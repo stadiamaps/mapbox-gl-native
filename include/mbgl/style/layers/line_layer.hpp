@@ -17,10 +17,10 @@ namespace style {
 
 class TransitionOptions;
 
-class LineLayer : public Layer {
+class LineLayer final : public Layer {
 public:
     LineLayer(const std::string& layerID, const std::string& sourceID);
-    ~LineLayer() final;
+    ~LineLayer() override;
 
     // Layout properties
 

@@ -98,7 +98,7 @@ public:
     void setPlacement(Immutable<Placement>);
     const Immutable<Placement>& getPlacement() const { return placement; }
     void setPlacementStale() { stale = true; }
-    bool placementIsRecent(TimePoint now, const float zoom, optional<Duration> periodOverride = nullopt) const;
+    bool placementIsRecent(TimePoint now, float zoom, optional<Duration> periodOverride = nullopt) const;
     bool hasTransitions(TimePoint now) const;
 
 private:
@@ -128,9 +128,9 @@ public:
 
     const CollisionIndex& getCollisionIndex() const;
     TimePoint getCommitTime() const { return commitTime; }
-    Duration getUpdatePeriod(const float zoom) const;
+    Duration getUpdatePeriod(float zoom) const;
 
-    float zoomAdjustment(const float zoom) const;
+    float zoomAdjustment(float zoom) const;
     const JointPlacement* getSymbolPlacement(const SymbolInstance&) const;
 
     const RetainedQueryData& getQueryData(uint32_t bucketInstanceId) const;
@@ -142,9 +142,7 @@ public:
 protected:
     friend SymbolBucket;
     virtual void placeSymbolBucket(const BucketPlacementData&, std::set<uint32_t>& seenCrossTileIDs);
-    void placeSymbol(const SymbolInstance& symbolInstance,
-                     const PlacementContext&,
-                     std::set<uint32_t>& seenCrossTileIDs);
+    JointPlacement placeSymbol(const SymbolInstance& symbolInstance, const PlacementContext&);
     void placeLayer(const RenderLayer&, std::set<uint32_t>&);
     virtual void commit();
     virtual void newSymbolPlaced(const SymbolInstance&,

@@ -93,7 +93,7 @@ struct ValueConverter<mbgl::Value> {
 template <>
 struct ValueConverter<float> {
     static type::Type expressionType() { return type::Number; }
-    static Value toExpressionValue(const float value);
+    static Value toExpressionValue(float value);
     static optional<float> fromExpressionValue(const Value& value);
 };
 
@@ -142,6 +142,7 @@ optional<T> fromExpressionValue(const Value& value) {
 template <typename T>
 std::vector<optional<T>> fromExpressionValues(const std::vector<optional<Value>>& values) {
     std::vector<optional<T>> result;
+    result.reserve(values.size());
     for (const auto& value : values) {
         result.push_back(value ? fromExpressionValue<T>(*value) : nullopt);
     }
