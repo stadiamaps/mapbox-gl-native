@@ -31,17 +31,17 @@ protected:
 /**
  * @brief ThreadScheduler implements Scheduler interface using a lightweight event loop
  *
- * @tparam N number of threads
+ * @param N number of threads
  *
  * Note: If N == 1 all scheduled tasks are guaranteed to execute consequently;
  * otherwise, some of the scheduled tasks might be executed in parallel.
  */
-template <std::size_t N>
 class ThreadedScheduler : public ThreadedSchedulerBase {
 public:
-    ThreadedScheduler() {
-        for (std::size_t i = 0u; i < N; ++i) {
-            threads[i] = makeSchedulerThread(i);
+    ThreadedScheduler(size_t nThreads) {
+        threads.resize(nThreads);
+        for (std::size_t i = 0u; i < nThreads; ++i) {
+            threads.push_back(makeSchedulerThread(i));
         }
     }
 
@@ -56,16 +56,19 @@ public:
     mapbox::base::WeakPtr<Scheduler> makeWeakPtr() override { return weakFactory.makeWeakPtr(); }
 
 private:
-    std::array<std::thread, N> threads;
+    std::vector<std::thread> threads;
     mapbox::base::WeakPtrFactory<Scheduler> weakFactory{this};
-    static_assert(N > 0, "Thread count must be more than zero.");
 };
 
-class SequencedScheduler : public ThreadedScheduler<1> {};
+class SequencedScheduler : public ThreadedScheduler {
+public:
+    SequencedScheduler() : ThreadedScheduler(1) {}
+};
 
-template <std::size_t extra>
-using ParallelScheduler = ThreadedScheduler<1 + extra>;
+class ThreadPool : public ThreadedScheduler {
+public:
+    ThreadPool(size_t nThreads) : ThreadedScheduler(nThreads) {}
 
-class ThreadPool : public ParallelScheduler<3> {};
+};
 
 } // namespace mbgl

@@ -1,6 +1,7 @@
 #include <mbgl/actor/scheduler.hpp>
 #include <mbgl/util/thread_local.hpp>
 #include <mbgl/util/thread_pool.hpp>
+#include <thread>
 
 namespace mbgl {
 
@@ -34,8 +35,10 @@ PassRefPtr<Scheduler> Scheduler::GetBackground() {
     std::lock_guard<std::mutex> lock(mtx);
     std::shared_ptr<Scheduler> scheduler = weak.lock();
 
+    const auto processor_count = std::thread::hardware_concurrency();
+
     if (!scheduler) {
-        weak = scheduler = std::make_shared<ThreadPool>();
+        weak = scheduler = std::make_shared<ThreadPool>(processor_count);
     }
 
     return PassRefPtr<Scheduler>(std::move(scheduler));
