@@ -41,7 +41,7 @@ const size_t MAX_BACKGROUND_THREADS = 64;
  */
 class ThreadedScheduler : public ThreadedSchedulerBase {
 public:
-    ThreadedScheduler(size_t desiredThreads) {
+    ThreadedScheduler(std::size_t desiredThreads) {
         nThreads = std::min(desiredThreads, MAX_BACKGROUND_THREADS);
 
         for (std::size_t i = 0u; i < nThreads; ++i) {
@@ -52,7 +52,7 @@ public:
     ~ThreadedScheduler() override {
         terminate();
 
-        for (size_t i = 0; i < nThreads; i++) {
+        for (std::size_t i = 0; i < nThreads; i++) {
             auto& thread = threads[i];
             assert(std::this_thread::get_id() != thread.get_id());
             thread.join();
@@ -62,7 +62,7 @@ public:
     mapbox::base::WeakPtr<Scheduler> makeWeakPtr() override { return weakFactory.makeWeakPtr(); }
 
 private:
-    size_t nThreads;
+    std::size_t nThreads;
     std::array<std::thread, MAX_BACKGROUND_THREADS> threads;
     mapbox::base::WeakPtrFactory<Scheduler> weakFactory{this};
 };
@@ -74,7 +74,7 @@ public:
 
 class ThreadPool : public ThreadedScheduler {
 public:
-    ThreadPool(size_t nThreads) : ThreadedScheduler(nThreads) {}
+    ThreadPool(std::size_t desiredThreads) : ThreadedScheduler(desiredThreads) {}
 
 };
 
